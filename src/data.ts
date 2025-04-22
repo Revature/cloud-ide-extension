@@ -17,12 +17,12 @@ export let config : config =  {
 }
 
 export let runner : {
-  
+
 }
 
 export function getConfig(): config {
   try{
-    const configContent = fs.readFileSync("C:/Users/TheodoreBalashov/cloudide.config", 'utf8');
+    const configContent = fs.readFileSync("/home/ubuntu/cloudide.config", 'utf8');
     let data : any =  JSON.parse(configContent);
     config = data;
   }catch{
