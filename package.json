@@ -1,5 +1,7 @@
 {
   "name": "cloud-ide-extension",
+  "publisher": "Revature",
+  "repository": "https://github.com/Revature/cloud-ide-extension",
   "displayName": "Cloud IDE Extension",
   "description": "Management tool for the Revature Cloud IDE",
   "version": "0.0.1",
