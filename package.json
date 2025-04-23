@@ -16,7 +16,7 @@
   ],
   "viewsWelcome": [
     {
-      "view": "cloudIdeView",
+      "view": "cloudIdeWebview",
       "contents": "Loading Cloud IDE resources...",
       "when": "!cloudIdeInitialized"
     }
@@ -45,26 +45,15 @@
     "views": {
       "cloud-ide-explorer": [
         {
+          "type": "webview",
           "icon": "resources/cloud.svg",
-          "id": "cloudIdeView",
+          "id": "cloudIdeWebview",
           "name": "Cloud IDE Resources"
         }
       ]
     },
     "menus": {
-      "view/title": [],
-      "view/item/context": [
-        {
-          "command": "cloud-ide-extension.showInfo",
-          "when": "view == cloudIdeView && viewItem == infoHeader",
-          "group": "inline"
-        },
-        {
-          "command": "cloud-ide-extension.openDevServer",
-          "when": "view == cloudIdeView && viewItem == devServerMenu",
-          "group": "inline"
-        }
-      ]
+      "view/title": []
     }
   },
   "scripts": {

@@ -20,7 +20,7 @@ export function registerCommands(context: vscode.ExtensionContext, provider: Clo
                 { modal: true }
             )
       }),
-      vscode.commands.registerCommand('cloud-ide-extension.openDevServer', async () => {
+      vscode.commands.registerCommand('cloud-ide-extension.openDevServerTab', async () => {
         let monolith : string = getConfig().monolithUrl
         vscode.window.showInformationMessage(monolith)
         
