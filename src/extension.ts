@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { getConfig } from './data';
+import { getConfig, runner } from './data';
+import { getDevServer, getRunnerInfo } from './api';
 
 export function activate(context: vscode.ExtensionContext) {
     // Create and register webview panel provider
@@ -14,6 +15,16 @@ export function activate(context: vscode.ExtensionContext) {
     registerCommands(context, provider);
 
     getConfig();
+
+    getRunnerInfo()
+    .then(response => response.json())
+    .then(json => { 
+        runner.session_end = json.session_end;
+        runner.session_start = json.session_start;
+        runner.user_id = json.user_id;
+        console.log("Got runner data:"+runner)
+    })
+
 }
 
 // Webview Provider Implementation
@@ -98,6 +109,8 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
             <div>
                 <h3>Session Management</h3>
                 <p>This session will end in:</p>
+                <br>
+                <button class="button" id="addTimeBtn">Add Time</button>
                 
                 <h3>Dev Servers</h3>
                 <div class="item-with-button">
@@ -118,6 +131,13 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
                     // Add log to show script is running
                     console.log('Webview script initialized');
                     
+                    document.getElementById('addTimeBtn').addEventListener('click', () => {
+                        console.log('Add time button clicked');
+                        vscode.postMessage({
+                            command: 'addTime'
+                        });
+                    });
+
                     document.getElementById('openDevServerBtn').addEventListener('click', () => {
                         console.log('Open dev server button clicked');
                         vscode.postMessage({
@@ -154,27 +174,17 @@ export function registerCommands(context: vscode.ExtensionContext, provider: Clo
         }),
         
         vscode.commands.registerCommand('cloud-ide-extension.openDevServer', async () => {
-            // Debug log
-            console.log('openDevServer command executed');
+            let monolith : string = getConfig().monolithUrl
+            vscode.window.showInformationMessage(monolith)
             
-            try {
-                let monolith: string = getConfig().monolithUrl;
-                vscode.window.showInformationMessage('Opening: ' + monolith);
-                
-                // Define the URL you want to open
-                const url = vscode.Uri.parse('https://revature.com');
-                
-                // Open the URL in the default external browser
-                const success = await vscode.env.openExternal(url);
-                
-                if (!success) {
-                    vscode.window.showErrorMessage('Failed to open the URL in browser');
-                }
-            } catch (error) {
-                console.error('Error in openDevServer command:', error);
-                vscode.window.showErrorMessage(`Error opening dev server: ${error}`);
-            }
-        })
+            // Open the URL in the default external browser
+    
+            let url = getDevServer().then(response => response.json())
+            .then(json => { 
+                vscode.env.openExternal(json.destination_url).then();
+              }
+            )
+          })
     );
 }
 

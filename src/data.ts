@@ -7,7 +7,13 @@ interface config {
 }
 
 interface runner {
+  session_start:string,
+  session_end:string,
+  user_id:number
+}
 
+interface devserver {
+  url:string
 }
 
 export let config : config =  {
@@ -16,8 +22,14 @@ export let config : config =  {
   runnerId:0
 }
 
-export let runner : {
+export let runner : runner = {
+  session_start:"",
+  session_end:"",
+  user_id:0
+}
 
+export let devserver : devserver = {
+  url : ""
 }
 
 export function getConfig(): config {
