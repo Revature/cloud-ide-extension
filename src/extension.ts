@@ -179,8 +179,9 @@ export function registerCommands(context: vscode.ExtensionContext, provider: Clo
             
             // Open the URL in the default external browser
     
-            let url = getDevServer().then(response => response.json())
+            let url = getDevServer().then(response => {console.log(response); return response.json()})
             .then(json => { 
+                console.log(json)
                 vscode.env.openExternal(json.destination_url).then();
               }
             )
