@@ -11,14 +11,18 @@ export function getRunnerInfo() {
     )
 }
 
-export function addTime(){
-    return fetch(`${config.monolithUrl}/api/${apiVersion}/runners/${config.runnerId}`,
+export function addTime(minutes:number){
+    return fetch(`${config.monolithUrl}/api/${apiVersion}/runners/${config.runnerId}/extend_session`,
         {headers: {
                 'Content-Type': 'application/json',
                 'Auth-Token': config.runnerAuth,
                 'Runner-Token': config.runnerAuth
             },
-            body:JSON.stringify({})
+            method:"PUT",
+            body:JSON.stringify({
+                runner_id: config.runnerId,
+                extra_time:minutes
+            })
         }
     )
 }
