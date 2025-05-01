@@ -3,7 +3,8 @@ const apiVersion = "v1"
 
 export function getRunnerInfo() {
     return fetch(`${config.monolithUrl}/api/${apiVersion}/runners/${config.runnerId}`,
-        {headers: {
+        {
+            headers: {
                 'Auth-Token': config.runnerAuth,
                 'Runner-Token': config.runnerAuth
             }
@@ -13,7 +14,8 @@ export function getRunnerInfo() {
 
 export function addTime(minutes:number){
     return fetch(`${config.monolithUrl}/api/${apiVersion}/runners/${config.runnerId}/extend_session`,
-        {headers: {
+        {
+            headers: {
                 'Content-Type': 'application/json',
                 'Auth-Token': config.runnerAuth,
                 'Runner-Token': config.runnerAuth
@@ -27,8 +29,8 @@ export function addTime(minutes:number){
     )
 }
 
-export function getDevServer(){
-    return fetch(`${config.monolithUrl}/api/${apiVersion}/runners/${config.runnerId}/devserver?port=4200`,
+export function getDevServer(port: number){
+    return fetch(`${config.monolithUrl}/api/${apiVersion}/runners/${config.runnerId}/devserver?port=${port}`,
         {headers: {
                 'Auth-Token': config.runnerAuth,
                 'Runner-Token': config.runnerAuth

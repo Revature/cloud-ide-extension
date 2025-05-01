@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { getConfig, runner } from './data';
-import { getDevServer, getRunnerInfo } from './api';
+import { addTime, getDevServer, getRunnerInfo } from './api';
 
 export function activate(context: vscode.ExtensionContext) {
     // Create and register webview panel provider
@@ -64,6 +64,8 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
                         console.log('Executing showInfo command');
                         vscode.commands.executeCommand('cloud-ide-extension.showInfo');
                         return;
+                    case 'addTime':
+                        vscode.commands.executeCommand('cloud-ide-extension.addTime')
                 }
             }
         );
@@ -161,7 +163,8 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
 export function registerCommands(context: vscode.ExtensionContext, provider: CloudIdeWebviewProvider) {
     context.subscriptions.push(
         vscode.commands.registerCommand('cloud-ide-extension.addTime', async () => {
-            provider.refresh();
+            addTime(5).then(response=>response.json()).then(json=>console.log(json)).catch(res=>console.log(res))
+            // provider.refresh();
         }),
 
         vscode.commands.registerCommand('cloud-ide-extension.showInfo', async () => {
@@ -174,17 +177,29 @@ export function registerCommands(context: vscode.ExtensionContext, provider: Clo
         }),
         
         vscode.commands.registerCommand('cloud-ide-extension.openDevServer', async () => {
-            let monolith : string = getConfig().monolithUrl
-            vscode.window.showInformationMessage(monolith)
             
-            // Open the URL in the default external browser
+            const input = await vscode.window.showInputBox({
+                placeHolder: 'Enter a number',
+                prompt: 'Please enter your desired port number (such as 4200)',
+                validateInput: (text) => {
+                    // Validate that input contains only numbers
+                    return /^\d+$/.test(text) ? null : 'Port must be a number.';
+                }
+            });
     
-            let url = getDevServer().then(response => {console.log(response); return response.json()})
-            .then(json => { 
-                console.log(json)
-                vscode.env.openExternal(json.destination_url).then();
-              }
-            )
+            if (input !== undefined) {
+                const port = parseInt(input);
+                
+                getDevServer(port).then(response => {console.log(response); return response.json()})
+                .then(json => { 
+                    console.log(json)
+                    vscode.env.openExternal(json.destination_url).then();
+                }
+                )
+                
+            }
+
+            
           })
     );
 }
