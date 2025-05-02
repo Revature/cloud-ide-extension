@@ -127,27 +127,16 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
                 .button:hover {
                     background-color: var(--vscode-button-hoverBackground);
                 }
-                .countdown {
-                    font-size: 1.2em;
-                    margin-bottom: 10px;
-                    font-weight: bold;
-                }
-                .countdown.warning {
-                    color: var(--vscode-errorForeground);
-                }
             </style>
         </head>
         <body>
             <div>
                 <h3>Session Management</h3>
-                <p>This session will end in:</p>
                 <div id="countdown" class="countdown">Loading...</div>
-                <button class="button" id="addTimeBtn">Add Time</button>
                 
                 <h3>Browser</h3>
                 <div class="item-with-button">
-                    <span>Open port in browser...</span>
-                    <button class="button" id="openDevServerBtn">Open</button>
+                    <button class="button" id="openDevServerBtn">Open in browser...</button>
                 </div>
                 
                 <div class="item-with-button">
@@ -213,7 +202,7 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
                             (minutes < 10 ? '0' : '') + minutes + ':' + 
                             (seconds < 10 ? '0' : '') + seconds;
                         
-                        document.getElementById('countdown').textContent = formattedTime;
+                        document.getElementById('countdown').textContent = "Session will end in:" + formattedTime;
                     }
                     
                     document.getElementById('addTimeBtn').addEventListener('click', () => {
