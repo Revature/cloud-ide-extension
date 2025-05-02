@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { getConfig, runner } from './data';
 import { addTime, getDevServer, getRunnerInfo } from './api';
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
     // Create and register webview panel provider
     const provider = new CloudIdeWebviewProvider(context.extensionUri);
     
@@ -17,17 +17,8 @@ export function activate(context: vscode.ExtensionContext) {
     getConfig();
 
     // Get initial runner info and then refresh the webview
-    getRunnerInfo()
-    .then(response => response.json())
-    .then(json => { 
-        runner.session_end = json.session_end;
-        runner.session_start = json.session_start;
-        runner.user_id = json.user_id;
-        console.log("Got runner data:" + JSON.stringify(runner));
-        
-        // Refresh the webview after getting runner data
-        provider.refresh();
-    });
+    await updateRunnerData();
+    provider.refresh();
 }
 
 // Webview Provider Implementation
@@ -225,6 +216,32 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
     }
 }
 
+async function updateRunnerData(): Promise<void> {
+    try {
+        const response = await getRunnerInfo();
+        const json = await response.json();
+        
+        // Store the original UTC session times
+        const utcSessionEnd = json.session_end;
+        const utcSessionStart = json.session_start;
+        
+        // Convert UTC times to local time
+        // This assumes the API returns ISO format strings (e.g., "2025-05-02T15:30:00Z")
+        const localSessionEnd = new Date(utcSessionEnd).toISOString();
+        const localSessionStart = new Date(utcSessionStart).toISOString();
+        
+        // Update the runner object with the converted times
+        runner.session_end = localSessionEnd;
+        runner.session_start = localSessionStart;
+        runner.user_id = json.user_id;
+        
+        return Promise.resolve();
+    } catch (error) {
+        console.error('Error updating runner data:', error);
+        return Promise.reject(error);
+    }
+}
+
 export function registerCommands(context: vscode.ExtensionContext, provider: CloudIdeWebviewProvider) {
     context.subscriptions.push(
         vscode.commands.registerCommand('cloud-ide-extension.addTime', async (webviewProvider) => {
@@ -233,13 +250,7 @@ export function registerCommands(context: vscode.ExtensionContext, provider: Clo
                 const json = await response.json();
                 console.log('Add time response:', json);
                 
-                // Update runner data after adding time
-                const runnerResponse = await getRunnerInfo();
-                const runnerJson = await runnerResponse.json();
-                
-                runner.session_end = runnerJson.session_end;
-                runner.session_start = runnerJson.session_start;
-                runner.user_id = runnerJson.user_id;
+                await updateRunnerData();
                 
                 console.log('Updated runner data:', JSON.stringify(runner));
                 
