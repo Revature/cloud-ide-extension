@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
 import { getConfig, runner } from './data';
 import { addTime, getDevServer, getRunnerInfo } from './api';
 
@@ -40,8 +42,17 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
             localResourceRoots: [this._extensionUri]
         };
 
+        // Get CSS and JS file paths
+        const styleMainUri = webviewView.webview.asWebviewUri(
+            vscode.Uri.joinPath(this._extensionUri, 'resources', 'styling.css')
+        );
+        
+        const scriptUri = webviewView.webview.asWebviewUri(
+            vscode.Uri.joinPath(this._extensionUri, 'resources', 'webview.js')
+        );
+
         // Set the webview's html content
-        webviewView.webview.html = this._getHtmlForWebview();
+        webviewView.webview.html = this._getHtmlForWebview(styleMainUri, scriptUri);
 
         // Handle messages from the webview
         webviewView.webview.onDidReceiveMessage(
@@ -76,7 +87,17 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
 
     public refresh() {
         if (this._view) {
-            this._view.webview.html = this._getHtmlForWebview();
+            // Get CSS and JS file paths
+            const styleMainUri = this._view.webview.asWebviewUri(
+                vscode.Uri.joinPath(this._extensionUri, 'resources', 'styling.css')
+            );
+            
+            const scriptUri = this._view.webview.asWebviewUri(
+                vscode.Uri.joinPath(this._extensionUri, 'resources', 'webview.js')
+            );
+            
+            // Update the HTML with the current CSS and JS paths
+            this._view.webview.html = this._getHtmlForWebview(styleMainUri, scriptUri);
             
             // After refreshing the HTML, update the session end time
             setTimeout(() => {
@@ -87,132 +108,36 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
             }, 500); // Small delay to ensure the webview is ready
         }
     }
-
-    private _getHtmlForWebview() {
-        return `<!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Cloud IDE</title>
-            <style>
-                body {
-                    padding: 10px;
-                    font-family: var(--vscode-font-family);
-                    color: var(--vscode-foreground);
-                }
-                .item-with-button {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin: 8px 0;
-                }
-                .button {
-                    background-color: var(--vscode-button-background);
-                    color: var(--vscode-button-foreground);
-                    border: none;
-                    padding: 4px 8px;
-                    cursor: pointer;
-                    border-radius: 2px;
-                }
-                .button:hover {
-                    background-color: var(--vscode-button-hoverBackground);
-                }
-            </style>
-        </head>
-        <body>
-            <div>
-                <h3>Session Management</h3>
-                <div id="countdown" class="countdown">Loading...</div>
-                
-                <h3>Browser</h3>
-                <div class="item-with-button">
-                    <button class="button" id="openDevServerBtn">Open in browser...</button>
+    
+    private _getHtmlForWebview(styleUri: vscode.Uri, scriptUri: vscode.Uri) {
+        // Read the HTML template file
+        const htmlPath = path.join(this._extensionUri.fsPath, 'resources', 'webview.html');
+        
+        try {
+            let htmlContent = fs.readFileSync(htmlPath, 'utf8');
+            
+            // Replace the CSS and JS placeholders with the actual URIs
+            htmlContent = htmlContent.replace('${styleUri}', styleUri.toString());
+            htmlContent = htmlContent.replace('${scriptUri}', scriptUri.toString());
+            
+            return htmlContent;
+        } catch (error) {
+            console.error('Error loading webview HTML template:', error);
+            
+            // Fallback to a simple HTML if the template file is not found
+            return `<!DOCTYPE html>
+            <html>
+              <head>
+                <meta charset="UTF-8">
+                <title>Cloud IDE</title>
+              </head>
+              <body>
+                <div>
+                  <p>Error loading webview template. Please check extension installation.</p>
                 </div>
-                
-                <div class="item-with-button">
-                    <h3>Info</h3>
-                    <button class="button" id="showInfoBtn">View</button>
-                </div>
-            </div>
-
-            <script>
-                (function() {
-                    const vscode = acquireVsCodeApi();
-                    let countdownInterval;
-                    let sessionEndTime;
-                    
-                    // Add log to show script is running
-                    console.log('Webview script initialized');
-                    
-                    // Request the session end time as soon as the webview loads
-                    vscode.postMessage({
-                        command: 'getSessionEndTime'
-                    });
-                    
-                    // Listen for messages from the extension
-                    window.addEventListener('message', event => {
-                        const message = event.data;
-                        
-                        if (message.command === 'updateSessionEndTime') {
-                            console.log('Received session end time:', message.sessionEndTime);
-                            sessionEndTime = new Date(message.sessionEndTime);
-                            
-                            // Clear any existing interval
-                            if (countdownInterval) {
-                                clearInterval(countdownInterval);
-                            }
-                            
-                            // Start the countdown
-                            updateCountdown();
-                            countdownInterval = setInterval(updateCountdown, 1000);
-                        }
-                    });
-                    
-                    function updateCountdown() {
-                        if (!sessionEndTime) return;
-                        
-                        const now = new Date();
-                        const timeRemaining = sessionEndTime - now;
-                        
-                        if (timeRemaining <= 0) {
-                            document.getElementById('countdown').textContent = 'Session expired!';
-                            document.getElementById('countdown').classList.add('warning');
-                            clearInterval(countdownInterval);
-                            return;
-                        }
-                        
-                        // Calculate hours, minutes, and seconds
-                        const hours = Math.floor(timeRemaining / (1000 * 60 * 60));
-                        const minutes = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
-                        const seconds = Math.floor((timeRemaining % (1000 * 60)) / 1000);
-                        
-                        // Format the countdown
-                        const formattedTime = 
-                            (hours > 0 ? hours + ' hours, ' : '') + 
-                            (minutes < 10 ? '0' : '') + minutes + ':' + 
-                            (seconds < 10 ? '0' : '') + seconds;
-                        
-                        document.getElementById('countdown').textContent = "Session will end in:" + formattedTime;
-                    }
-
-                    document.getElementById('openDevServerBtn').addEventListener('click', () => {
-                        console.log('Open dev server button clicked');
-                        vscode.postMessage({
-                            command: 'openDevServer'
-                        });
-                    });
-                    
-                    document.getElementById('showInfoBtn').addEventListener('click', () => {
-                        console.log('Show info button clicked');
-                        vscode.postMessage({
-                            command: 'showInfo'
-                        });
-                    });
-                }());
-            </script>
-        </body>
-        </html>`;
+              </body>
+            </html>`;
+        }
     }
 }
 
@@ -304,7 +229,7 @@ export function registerCommands(context: vscode.ExtensionContext, provider: Clo
                     vscode.window.showErrorMessage(`Failed to open dev server on port ${port}`);
                 }
             }
-          })
+        })
     );
 }
 
