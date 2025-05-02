@@ -204,13 +204,6 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
                         
                         document.getElementById('countdown').textContent = "Session will end in:" + formattedTime;
                     }
-                    
-                    document.getElementById('addTimeBtn').addEventListener('click', () => {
-                        console.log('Add time button clicked');
-                        vscode.postMessage({
-                            command: 'addTime'
-                        });
-                    });
 
                     document.getElementById('openDevServerBtn').addEventListener('click', () => {
                         console.log('Open dev server button clicked');
