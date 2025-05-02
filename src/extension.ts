@@ -16,15 +16,18 @@ export function activate(context: vscode.ExtensionContext) {
 
     getConfig();
 
+    // Get initial runner info and then refresh the webview
     getRunnerInfo()
     .then(response => response.json())
     .then(json => { 
         runner.session_end = json.session_end;
         runner.session_start = json.session_start;
         runner.user_id = json.user_id;
-        console.log("Got runner data:"+runner)
-    })
-
+        console.log("Got runner data:" + JSON.stringify(runner));
+        
+        // Refresh the webview after getting runner data
+        provider.refresh();
+    });
 }
 
 // Webview Provider Implementation
@@ -65,7 +68,16 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
                         vscode.commands.executeCommand('cloud-ide-extension.showInfo');
                         return;
                     case 'addTime':
-                        vscode.commands.executeCommand('cloud-ide-extension.addTime')
+                        console.log('Executing addTime command');
+                        vscode.commands.executeCommand('cloud-ide-extension.addTime', this);
+                        return;
+                    case 'getSessionEndTime':
+                        console.log('Sending session end time');
+                        this._view?.webview.postMessage({
+                            command: 'updateSessionEndTime',
+                            sessionEndTime: runner.session_end
+                        });
+                        return;
                 }
             }
         );
@@ -74,6 +86,14 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
     public refresh() {
         if (this._view) {
             this._view.webview.html = this._getHtmlForWebview();
+            
+            // After refreshing the HTML, update the session end time
+            setTimeout(() => {
+                this._view?.webview.postMessage({
+                    command: 'updateSessionEndTime',
+                    sessionEndTime: runner.session_end
+                });
+            }, 500); // Small delay to ensure the webview is ready
         }
     }
 
@@ -87,6 +107,8 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
             <style>
                 body {
                     padding: 10px;
+                    font-family: var(--vscode-font-family);
+                    color: var(--vscode-foreground);
                 }
                 .item-with-button {
                     display: flex;
@@ -105,18 +127,26 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
                 .button:hover {
                     background-color: var(--vscode-button-hoverBackground);
                 }
+                .countdown {
+                    font-size: 1.2em;
+                    margin-bottom: 10px;
+                    font-weight: bold;
+                }
+                .countdown.warning {
+                    color: var(--vscode-errorForeground);
+                }
             </style>
         </head>
         <body>
             <div>
                 <h3>Session Management</h3>
                 <p>This session will end in:</p>
-                <br>
+                <div id="countdown" class="countdown">Loading...</div>
                 <button class="button" id="addTimeBtn">Add Time</button>
                 
-                <h3>Dev Servers</h3>
+                <h3>Browser</h3>
                 <div class="item-with-button">
-                    <span>localhost:4200</span>
+                    <span>Open port in browser...</span>
                     <button class="button" id="openDevServerBtn">Open</button>
                 </div>
                 
@@ -129,9 +159,62 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
             <script>
                 (function() {
                     const vscode = acquireVsCodeApi();
+                    let countdownInterval;
+                    let sessionEndTime;
                     
                     // Add log to show script is running
                     console.log('Webview script initialized');
+                    
+                    // Request the session end time as soon as the webview loads
+                    vscode.postMessage({
+                        command: 'getSessionEndTime'
+                    });
+                    
+                    // Listen for messages from the extension
+                    window.addEventListener('message', event => {
+                        const message = event.data;
+                        
+                        if (message.command === 'updateSessionEndTime') {
+                            console.log('Received session end time:', message.sessionEndTime);
+                            sessionEndTime = new Date(message.sessionEndTime);
+                            
+                            // Clear any existing interval
+                            if (countdownInterval) {
+                                clearInterval(countdownInterval);
+                            }
+                            
+                            // Start the countdown
+                            updateCountdown();
+                            countdownInterval = setInterval(updateCountdown, 1000);
+                        }
+                    });
+                    
+                    function updateCountdown() {
+                        if (!sessionEndTime) return;
+                        
+                        const now = new Date();
+                        const timeRemaining = sessionEndTime - now;
+                        
+                        if (timeRemaining <= 0) {
+                            document.getElementById('countdown').textContent = 'Session expired!';
+                            document.getElementById('countdown').classList.add('warning');
+                            clearInterval(countdownInterval);
+                            return;
+                        }
+                        
+                        // Calculate hours, minutes, and seconds
+                        const hours = Math.floor(timeRemaining / (1000 * 60 * 60));
+                        const minutes = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+                        const seconds = Math.floor((timeRemaining % (1000 * 60)) / 1000);
+                        
+                        // Format the countdown
+                        const formattedTime = 
+                            (hours > 0 ? hours + ' hours, ' : '') + 
+                            (minutes < 10 ? '0' : '') + minutes + ':' + 
+                            (seconds < 10 ? '0' : '') + seconds;
+                        
+                        document.getElementById('countdown').textContent = formattedTime;
+                    }
                     
                     document.getElementById('addTimeBtn').addEventListener('click', () => {
                         console.log('Add time button clicked');
@@ -162,9 +245,35 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
 
 export function registerCommands(context: vscode.ExtensionContext, provider: CloudIdeWebviewProvider) {
     context.subscriptions.push(
-        vscode.commands.registerCommand('cloud-ide-extension.addTime', async () => {
-            addTime(5).then(response=>response.json()).then(json=>console.log(json)).catch(res=>console.log(res))
-            // provider.refresh();
+        vscode.commands.registerCommand('cloud-ide-extension.addTime', async (webviewProvider) => {
+            try {
+                const response = await addTime(5);
+                const json = await response.json();
+                console.log('Add time response:', json);
+                
+                // Update runner data after adding time
+                const runnerResponse = await getRunnerInfo();
+                const runnerJson = await runnerResponse.json();
+                
+                runner.session_end = runnerJson.session_end;
+                runner.session_start = runnerJson.session_start;
+                runner.user_id = runnerJson.user_id;
+                
+                console.log('Updated runner data:', JSON.stringify(runner));
+                
+                // Refresh the webview to show the updated time
+                if (webviewProvider) {
+                    webviewProvider.refresh();
+                } else if (provider) {
+                    provider.refresh();
+                }
+                
+                // Show confirmation to the user
+                vscode.window.showInformationMessage('Successfully added 5 minutes to your session.');
+            } catch (error) {
+                console.error('Error adding time:', error);
+                vscode.window.showErrorMessage('Failed to add time to your session.');
+            }
         }),
 
         vscode.commands.registerCommand('cloud-ide-extension.showInfo', async () => {
@@ -190,16 +299,18 @@ export function registerCommands(context: vscode.ExtensionContext, provider: Clo
             if (input !== undefined) {
                 const port = parseInt(input);
                 
-                getDevServer(port).then(response => {console.log(response); return response.json()})
-                .then(json => { 
-                    console.log(json)
-                    vscode.env.openExternal(json.destination_url).then();
+                try {
+                    const response = await getDevServer(port);
+                    const json = await response.json();
+                    console.log('Dev server response:', json);
+                    
+                    await vscode.env.openExternal(vscode.Uri.parse(json.destination_url));
+                    vscode.window.showInformationMessage(`Opened dev server on port ${port}`);
+                } catch (error) {
+                    console.error('Error opening dev server:', error);
+                    vscode.window.showErrorMessage(`Failed to open dev server on port ${port}`);
                 }
-                )
-                
             }
-
-            
           })
     );
 }
