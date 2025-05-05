@@ -28,6 +28,8 @@ export let runner : runner = {
   user_id:0
 }
 
+export const expiry_notification_time = 10;
+
 export let devserver : devserver = {
   url : ""
 }
