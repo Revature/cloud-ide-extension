@@ -65,23 +65,6 @@ body {
     margin-top: 3px; /* Reduced margin */
 }
 
-/* Style for the info section to make it more compact */
-.info-section {
-    padding: 5px; /* Reduced padding */
-    margin-bottom: 8px; /* Reduced margin */
-}
-
-.info-section .section-title {
-    font-size: 9px; /* Smaller title for info section */
-    padding-bottom: 2px; /* Reduced padding */
-    margin-bottom: 4px; /* Reduced margin */
-}
-
-.info-section .button {
-    padding: 2px 6px; /* Smaller padding for button in info section */
-    font-size: 9px; /* Smaller font for button in info section */
-}
-
 .footer {
     position: relative;
     bottom: 0;
@@ -93,4 +76,17 @@ body {
     margin-top: 12px; /* Reduced margin */
     padding-top: 4px; /* Reduced padding */
     border-top: 1px solid var(--vscode-panel-border);
+}
+
+/* Style for the info link in the footer */
+.info-link {
+    color: var(--vscode-textLink-foreground);
+    text-decoration: none;
+    margin-left: 5px;
+    font-size: 9px;
+}
+
+.info-link:hover {
+    color: var(--vscode-textLink-activeForeground);
+    text-decoration: underline;
 }
