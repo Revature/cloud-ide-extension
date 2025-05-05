@@ -56,6 +56,14 @@ body {
     margin-bottom: 4px;
 }
 
+/* New class for small informational text */
+.small-info {
+    font-size: 10px;
+    color: var(--vscode-descriptionForeground);
+    font-style: italic;
+    margin-top: 4px;
+}
+
 .footer {
     position: relative;
     bottom: 0;

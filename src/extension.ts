@@ -66,25 +66,18 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
         // Handle messages from the webview
         webviewView.webview.onDidReceiveMessage(
             message => {
-                // Log the message for debugging
-                console.log('Received message:', message);
                 
                 switch (message.command) {
                     case 'openDevServer':
-                        console.log('Executing openDevServer command');
                         vscode.commands.executeCommand('cloud-ide-extension.openDevServer');
                         return;
                     case 'showInfo':
-                        console.log('Executing showInfo command');
                         vscode.commands.executeCommand('cloud-ide-extension.showInfo');
                         return;
                     case 'addTime':
-                        console.log('Executing addTime command');
                         vscode.commands.executeCommand('cloud-ide-extension.addTime', this);
                         return;
-                    case 'getSessionEndTime':
-                        console.log('Sending session end time and configuration');
-                        this._view?.webview.postMessage({
+                    case 'getSessionEndTime':                        this._view?.webview.postMessage({
                             command: 'updateSessionEndTime',
                             sessionEndTime: runner.session_end,
                             expiryNotificationTime: expiry_notification_time
@@ -93,6 +86,12 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
                 }
             }
         );
+
+        this._view?.webview.postMessage({
+            command: 'updateSessionEndTime',
+            sessionEndTime: runner.session_end,
+            expiryNotificationTime: expiry_notification_time
+        });
     
         // Start the expiry check interval
         this.startExpiryCheck();
@@ -229,22 +228,50 @@ async function updateRunnerData(): Promise<void> {
 export function registerCommands(context: vscode.ExtensionContext, provider: CloudIdeWebviewProvider) {
     context.subscriptions.push(
         vscode.commands.registerCommand('cloud-ide-extension.addTime', async (webviewProvider) => {
-            try {
-                const response = await addTime(60);
-                const json = await response.json();
-                console.log('Add time response:', json);
-                await updateRunnerData();
-                console.log('Updated runner data:', JSON.stringify(runner));
-                if (webviewProvider) {
-                    webviewProvider.refresh();
-                } else if (provider) {
-                    provider.refresh();
+            // Create a promise that resolves after expiry_notification_time minutes
+            const timeoutPromise = new Promise<string | undefined>((resolve) => {
+                setTimeout(() => {
+                    resolve(undefined); // Resolve with undefined to indicate timeout
+                }, expiry_notification_time * 60 * 1000); // Convert minutes to milliseconds
+            });
+            
+            // Show a modal information message with only the "Add 30 Minutes" button
+            const messagePromise = vscode.window.showInformationMessage(
+                'Your session is about to expire. Would you like to add more time?',
+                { modal: true },
+                'Add 30 Minutes'
+            );
+            
+            // Race the message promise against the timeout promise
+            const selection = await Promise.race([messagePromise, timeoutPromise]);
+            
+            // If the dialog timed out, just return
+            if (!selection) {
+                return;
+            }
+            
+            // If the user clicked "Add 30 Minutes"
+            if (selection === 'Add 30 Minutes') {
+                try {
+                    // Call the API to add 30 minutes (parameter is minutes * 2)
+                    const response = await addTime(30);
+                    const json = await response.json();
+                    // Update the runner data with the new session end time
+                    await updateRunnerData();
+                                        
+                    // Refresh the webview to show the updated time
+                    if (webviewProvider) {
+                        webviewProvider.refresh();
+                    } else if (provider) {
+                        provider.refresh();
+                    }
+                    
+                    // Show confirmation to the user
+                    vscode.window.showInformationMessage('Successfully added 30 minutes to your session.');
+                } catch (error) {
+                    console.error('Error adding time:', error);
+                    vscode.window.showErrorMessage('Failed to add time to your session.');
                 }
-                
-                vscode.window.showInformationMessage('Successfully added 5 minutes to your session.');
-            } catch (error) {
-                console.error('Error adding time:', error);
-                vscode.window.showErrorMessage('Failed to add time to your session.');
             }
         }),
 
@@ -274,7 +301,6 @@ export function registerCommands(context: vscode.ExtensionContext, provider: Clo
                 try {
                     const response = await getDevServer(port);
                     const json = await response.json();
-                    console.log('Dev server response:', json);
                     
                     await vscode.env.openExternal(vscode.Uri.parse(json.destination_url));
                     vscode.window.showInformationMessage(`Opened dev server on port ${port}`);
