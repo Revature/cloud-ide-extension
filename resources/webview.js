@@ -2,6 +2,7 @@
     const vscode = acquireVsCodeApi();
     let countdownInterval;
     let sessionEndTime;
+    let expiryNotificationTime;
     
     // Add log to show script is running
     console.log('Webview script initialized');
@@ -40,9 +41,14 @@
         const now = new Date();
         const timeRemaining = sessionEndTime - now;
         
+        // Get the Add Time button
+        const addTimeBtn = document.getElementById('addTimeBtn');
+        
         if (timeRemaining <= 0) {
             document.getElementById('countdown').textContent = 'Session expired!';
             document.getElementById('countdown').classList.add('warning');
+            // Show the Add Time button when session is expired
+            addTimeBtn.style.display = 'block';
             clearInterval(countdownInterval);
             return;
         }
@@ -59,6 +65,22 @@
             (seconds < 10 ? '0' : '') + seconds;
         
         document.getElementById('countdown').textContent = "Session will end in: " + formattedTime;
+        
+        // Show or hide Add Time button based on time remaining
+        // Now using the value passed from the extension
+        if (timeRemaining <= expiryNotificationTime) {
+            // Show the Add Time button when less than expiry_notification_time minutes remain
+            addTimeBtn.style.display = 'block';
+            
+            // Add warning class to countdown when time is running out
+            document.getElementById('countdown').classList.add('warning');
+        } else {
+            // Hide the Add Time button when more than expiry_notification_time minutes remain
+            addTimeBtn.style.display = 'none';
+            
+            // Remove warning class when there's plenty of time
+            document.getElementById('countdown').classList.remove('warning');
+        }
     }
     
     // Alternative way to set up event listeners if DOMContentLoaded might have already fired

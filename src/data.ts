@@ -29,6 +29,7 @@ export let runner : runner = {
 }
 
 export const expiry_notification_time = 10;
+export const add_time_amount = 30;
 
 export let devserver : devserver = {
   url : ""

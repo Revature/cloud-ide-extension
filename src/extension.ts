@@ -44,13 +44,13 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
         _token: vscode.CancellationToken
     ) {
         this._view = webviewView;
-
+    
         // Set options for the webview
         webviewView.webview.options = {
             enableScripts: true,
             localResourceRoots: [this._extensionUri]
         };
-
+    
         // Get CSS and JS file paths
         const styleMainUri = webviewView.webview.asWebviewUri(
             vscode.Uri.joinPath(this._extensionUri, 'resources', 'styling.css')
@@ -59,10 +59,10 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
         const scriptUri = webviewView.webview.asWebviewUri(
             vscode.Uri.joinPath(this._extensionUri, 'resources', 'webview.js')
         );
-
+    
         // Set the webview's html content
         webviewView.webview.html = this._getHtmlForWebview(styleMainUri, scriptUri);
-
+    
         // Handle messages from the webview
         webviewView.webview.onDidReceiveMessage(
             message => {
@@ -83,15 +83,19 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
                         vscode.commands.executeCommand('cloud-ide-extension.addTime', this);
                         return;
                     case 'getSessionEndTime':
-                        console.log('Sending session end time');
+                        console.log('Sending session end time and configuration');
                         this._view?.webview.postMessage({
                             command: 'updateSessionEndTime',
-                            sessionEndTime: runner.session_end
+                            sessionEndTime: runner.session_end,
+                            expiryNotificationTime: expiry_notification_time
                         });
                         return;
                 }
             }
         );
+    
+        // Start the expiry check interval
+        this.startExpiryCheck();
     }
 
     public refresh() {
@@ -112,7 +116,8 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
             setTimeout(() => {
                 this._view?.webview.postMessage({
                     command: 'updateSessionEndTime',
-                    sessionEndTime: runner.session_end
+                    sessionEndTime: runner.session_end,
+                    expiryNotificationTime: expiry_notification_time
                 });
             }, 500); // Small delay to ensure the webview is ready
         }
@@ -159,15 +164,7 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
             // Round the minutes for display
             const roundedMinutes = Math.ceil(minutesRemaining);
             
-            vscode.window.showWarningMessage(
-                `Your session will expire in ${roundedMinutes} minute${roundedMinutes === 1 ? '' : 's'}. ` +
-                'Please add more time if needed.',
-                'Add 5 Minutes'
-            ).then(selection => {
-                if (selection === 'Add 5 Minutes') {
-                    vscode.commands.executeCommand('cloud-ide-extension.addTime', this);
-                }
-            });
+            vscode.commands.executeCommand("cloud-ide-extension.addTime");
         }
     }
     
@@ -236,19 +233,14 @@ export function registerCommands(context: vscode.ExtensionContext, provider: Clo
                 const response = await addTime(60);
                 const json = await response.json();
                 console.log('Add time response:', json);
-                
                 await updateRunnerData();
-                
                 console.log('Updated runner data:', JSON.stringify(runner));
-                
-                // Refresh the webview to show the updated time
                 if (webviewProvider) {
                     webviewProvider.refresh();
                 } else if (provider) {
                     provider.refresh();
                 }
                 
-                // Show confirmation to the user
                 vscode.window.showInformationMessage('Successfully added 5 minutes to your session.');
             } catch (error) {
                 console.error('Error adding time:', error);
