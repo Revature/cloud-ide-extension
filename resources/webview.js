@@ -60,31 +60,6 @@
         
         document.getElementById('countdown').textContent = "Session will end in: " + formattedTime;
     }
-
-    // Set up button event listeners when the DOM is fully loaded
-    document.addEventListener('DOMContentLoaded', () => {
-        document.getElementById('openDevServerBtn').addEventListener('click', () => {
-            console.log('Open dev server button clicked');
-            vscode.postMessage({
-                command: 'openDevServer'
-            });
-        });
-        
-        document.getElementById('showInfoBtn').addEventListener('click', () => {
-            console.log('Show info button clicked');
-            vscode.postMessage({
-                command: 'showInfo'
-            });
-        });
-        
-        // Add event listener for the add time button
-        document.getElementById('addTimeBtn').addEventListener('click', () => {
-            console.log('Add time button clicked');
-            vscode.postMessage({
-                command: 'addTime'
-            });
-        });
-    });
     
     // Alternative way to set up event listeners if DOMContentLoaded might have already fired
     if (document.readyState === 'loading') {
