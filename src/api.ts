@@ -1,12 +1,12 @@
-import { config, runner } from "./data";
+import { runnerConfig, runnerState } from "./data";
 const apiVersion = "v1"
 
 export function getRunnerInfo() {
-    return fetch(`${config.monolithUrl}/api/${apiVersion}/runners/${config.runnerId}`,
+    return fetch(`${runnerConfig.monolithUrl}/api/${apiVersion}/runners/${runnerConfig.runnerId}`,
         {
             headers: {
-                'Auth-Token': config.runnerAuth,
-                'Runner-Token': config.runnerAuth
+                'Auth-Token': runnerConfig.runnerAuth,
+                'Runner-Token': runnerConfig.runnerAuth
             }
         }
     )
@@ -19,16 +19,16 @@ export function getRunnerInfo() {
 }
 
 export function addTime(minutes: number) {
-    return fetch(`${config.monolithUrl}/api/${apiVersion}/runners/${config.runnerId}/extend_session`,
+    return fetch(`${runnerConfig.monolithUrl}/api/${apiVersion}/runners/${runnerConfig.runnerId}/extend_session`,
         {
             headers: {
                 'Content-Type': 'application/json',
-                'Auth-Token': config.runnerAuth,
-                'Runner-Token': config.runnerAuth
+                'Auth-Token': runnerConfig.runnerAuth,
+                'Runner-Token': runnerConfig.runnerAuth
             },
             method: "PUT",
             body: JSON.stringify({
-                runner_id: config.runnerId,
+                runner_id: runnerConfig.runnerId,
                 extra_time: minutes
             })
         }
@@ -42,11 +42,11 @@ export function addTime(minutes: number) {
 }
 
 export function getDevServer(port: number) {
-    return fetch(`${config.monolithUrl}/api/${apiVersion}/runners/${config.runnerId}/devserver?port=${port}`,
+    return fetch(`${runnerConfig.monolithUrl}/api/${apiVersion}/runners/${runnerConfig.runnerId}/devserver?port=${port}`,
         {
             headers: {
-                'Auth-Token': config.runnerAuth,
-                'Runner-Token': config.runnerAuth
+                'Auth-Token': runnerConfig.runnerAuth,
+                'Runner-Token': runnerConfig.runnerAuth
             }
         }
     )
@@ -60,11 +60,11 @@ export function getDevServer(port: number) {
 
 export function getNotifications() {
     // Implementation for notifications API
-    return fetch(`${config.monolithUrl}/api/${apiVersion}/runners/${config.runnerId}/notifications`,
+    return fetch(`${runnerConfig.monolithUrl}/api/${apiVersion}/runners/${runnerConfig.runnerId}/notifications`,
         {
             headers: {
-                'Auth-Token': config.runnerAuth,
-                'Runner-Token': config.runnerAuth
+                'Auth-Token': runnerConfig.runnerAuth,
+                'Runner-Token': runnerConfig.runnerAuth
             }
         }
     )

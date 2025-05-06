@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getConfig, runner, expiry_notification_time } from './data';
+import { getConfig, runnerState, expiry_notification_time, runnerConfig } from './data';
 import { addTime, getDevServer, getRunnerInfo } from './api';
 
 export async function activate(context: vscode.ExtensionContext) {
@@ -21,6 +21,23 @@ export async function activate(context: vscode.ExtensionContext) {
     // Get initial runner info and then refresh the webview
     await updateRunnerData();
     provider.refresh();
+
+    try {
+        const defaultReadmePath = "/home/ubuntu/readme.md";
+        // The path can be absolute or relative to the workspace
+        if(runnerConfig.filePath == null){
+            let fileExists : boolean = fs.existsSync(defaultReadmePath);
+            if(fileExists){
+                await vscode.workspace.openTextDocument(defaultReadmePath);
+            }
+        }else{
+            const filePath  = vscode.Uri.file(runnerConfig.filePath as string);
+            const document = await vscode.workspace.openTextDocument(filePath);
+            await vscode.window.showTextDocument(document);
+        }
+    } catch (error) {
+        console.error('Error opening file on startup:', error);
+    }
 
     // Make sure to dispose the provider when the extension is deactivated
     context.subscriptions.push({
@@ -79,7 +96,7 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
                         return;
                     case 'getSessionEndTime':                        this._view?.webview.postMessage({
                             command: 'updateSessionEndTime',
-                            sessionEndTime: runner.session_end,
+                            sessionEndTime: runnerState.session_end,
                             expiryNotificationTime: expiry_notification_time
                         });
                         return;
@@ -89,7 +106,7 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
 
         this._view?.webview.postMessage({
             command: 'updateSessionEndTime',
-            sessionEndTime: runner.session_end,
+            sessionEndTime: runnerState.session_end,
             expiryNotificationTime: expiry_notification_time
         });
     
@@ -115,7 +132,7 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
             setTimeout(() => {
                 this._view?.webview.postMessage({
                     command: 'updateSessionEndTime',
-                    sessionEndTime: runner.session_end,
+                    sessionEndTime: runnerState.session_end,
                     expiryNotificationTime: expiry_notification_time
                 });
             }, 500); // Small delay to ensure the webview is ready
@@ -147,12 +164,12 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
 
     // Check if the session is about to expire
     private checkSessionExpiry() {
-        if (!runner.session_end) {
+        if (!runnerState.session_end) {
             return; // No session end time available yet
         }
 
         const now = new Date();
-        const sessionEnd = new Date(runner.session_end);
+        const sessionEnd = new Date(runnerState.session_end);
         
         // Calculate minutes remaining
         const minutesRemaining = (sessionEnd.getTime() - now.getTime()) / (1000 * 60);
@@ -214,9 +231,7 @@ async function updateRunnerData(): Promise<void> {
         const localSessionStart = new Date(utcSessionStart).toISOString();
         
         // Update the runner object with the converted times
-        runner.session_end = localSessionEnd;
-        runner.session_start = localSessionStart;
-        runner.user_id = json.user_id;
+        runnerState.session_end = localSessionEnd;
         
         return Promise.resolve();
     } catch (error) {
@@ -226,11 +241,22 @@ async function updateRunnerData(): Promise<void> {
 }
 
 export function registerCommands(context: vscode.ExtensionContext, provider: CloudIdeWebviewProvider) {
+    let isModalActive = false;
     context.subscriptions.push(
         vscode.commands.registerCommand('cloud-ide-extension.addTime', async (webviewProvider) => {
+            // If a modal is already active, don't show another one
+            if (isModalActive) {
+                return;
+            }
+            
+            // Set the flag to indicate a modal is active
+            isModalActive = true;
+            
             // Create a promise that resolves after expiry_notification_time minutes
             const timeoutPromise = new Promise<string | undefined>((resolve) => {
                 setTimeout(() => {
+                    // Reset the flag when the timeout occurs
+                    isModalActive = false;
                     resolve(undefined); // Resolve with undefined to indicate timeout
                 }, expiry_notification_time * 60 * 1000); // Convert minutes to milliseconds
             });
@@ -253,12 +279,13 @@ export function registerCommands(context: vscode.ExtensionContext, provider: Clo
             // If the user clicked "Add 30 Minutes"
             if (selection === 'Add 30 Minutes') {
                 try {
+                    
                     // Call the API to add 30 minutes (parameter is minutes * 2)
-                    const response = await addTime(30);
+                    const response = await addTime(60); // 60 represents 30 minutes in the API
                     const json = await response.json();
+                    isModalActive = false;
                     // Update the runner data with the new session end time
                     await updateRunnerData();
-                                        
                     // Refresh the webview to show the updated time
                     if (webviewProvider) {
                         webviewProvider.refresh();

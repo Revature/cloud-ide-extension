@@ -1,58 +1,60 @@
 import fs from 'fs';
 
-interface config {
+interface runnerConfig {
   runnerAuth:string,
   monolithUrl:string,
-  runnerId:number
+  runnerId:number,
+  maxSessionTime:number,
+  sessionStart:string,
+  userId:number,
+  filePath:string | null
 }
 
-interface runner {
-  session_start:string,
+interface runnerState {
   session_end:string,
-  user_id:number
 }
 
-interface devserver {
-  url:string
+export let runnerConfig : runnerConfig =  {
+  runnerAuth: "",
+  monolithUrl: "",
+  runnerId: 0,
+  maxSessionTime: 0,
+  sessionStart: '',
+  userId: 0,
+  filePath: null
 }
 
-export let config : config =  {
-  runnerAuth:"", 
-  monolithUrl:"",
-  runnerId:0
-}
-
-export let runner : runner = {
-  session_start:"",
-  session_end:"",
-  user_id:0
+export let runnerState : runnerState = {
+  session_end:""
 }
 
 export const expiry_notification_time = 10;
 export const add_time_amount = 30;
 
-export let devserver : devserver = {
-  url : ""
-}
-
-export function getConfig(): config {
+export function getConfig() {
   try{
-    const configContent = fs.readFileSync("/home/ubuntu/.cloudide.config", 'utf8');
-    let data : any =  JSON.parse(configContent);
-    config = data;
+    const runnerConfigContent = fs.readFileSync("/home/ubuntu/.cloudide.config", 'utf8');
+      runnerConfig =  JSON.parse(runnerConfigContent);
   }catch{
-    throw Error ("Config error! Issue reading config file")
+    throw Error ("Config error! Issue reading runner config file")
   }
   
-  if (config.runnerAuth == null || config.runnerAuth == undefined){
+  if (runnerConfig.runnerAuth == null || runnerConfig.runnerAuth == undefined){
     throw Error("Config error! no runnerAuth provided.")
   }
-  if (config.monolithUrl == null || config.monolithUrl == undefined){
+  if (runnerConfig.monolithUrl == null || runnerConfig.monolithUrl == undefined){
     throw Error("Config error! no monolithUrl provided.")
   }
-  if (config.runnerId == 0 || config.runnerId == undefined){
+  if (runnerConfig.runnerId == 0 || runnerConfig.runnerId == undefined){
     throw Error("Config error! no runnerId provided.")
   }
-  
-  return config;
+  if (runnerConfig.maxSessionTime == 0 || runnerConfig.maxSessionTime == undefined){
+    throw Error("Config error! no maxSessionTime provided.")
+  }
+  if (runnerConfig.userId == 0 || runnerConfig.userId == undefined){
+    throw Error("Config error! no userId provided.")
+  }
+  if (runnerConfig.sessionStart == null || runnerConfig.sessionStart == undefined){
+    throw Error("Config error! no sessionStart provided.")
+  }
 }
