@@ -4,6 +4,9 @@ import * as path from 'path';
 import { getConfig, runnerState, expiry_notification_time, runnerConfig } from './data';
 import { addTime, getDevServer, getRunnerInfo } from './api';
 
+// Global interval reference for session expiry checks
+let expiryCheckInterval: NodeJS.Timeout | undefined;
+
 export async function activate(context: vscode.ExtensionContext) {
     // Create and register webview panel provider
     const provider = new CloudIdeWebviewProvider(context.extensionUri);
@@ -18,7 +21,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
     getConfig();
 
-    // Get initial runner info and then refresh the webview
+    // Get initial runner info 
     await updateRunnerData();
     provider.refresh();
 
@@ -28,9 +31,11 @@ export async function activate(context: vscode.ExtensionContext) {
         if(runnerConfig.filePath == null){
             let fileExists : boolean = fs.existsSync(defaultReadmePath);
             if(fileExists){
+                console.log("Opening default readme file")
                 await vscode.workspace.openTextDocument(defaultReadmePath);
             }
         }else{
+            console.log("Opening provided startup file")
             const filePath  = vscode.Uri.file(runnerConfig.filePath as string);
             const document = await vscode.workspace.openTextDocument(filePath);
             await vscode.window.showTextDocument(document);
@@ -39,19 +44,66 @@ export async function activate(context: vscode.ExtensionContext) {
         console.error('Error opening file on startup:', error);
     }
 
-    // Make sure to dispose the provider when the extension is deactivated
+    // Start the global expiry check - this will run regardless of webview state
+    startGlobalExpiryCheck(provider);
+
+    // Make sure to dispose resources when the extension is deactivated
     context.subscriptions.push({
         dispose: () => {
             provider.dispose();
+            stopGlobalExpiryCheck();
         }
     });
 }
 
+// Start checking for session expiry globally
+function startGlobalExpiryCheck(provider: CloudIdeWebviewProvider) {
+    // Clear any existing interval
+    stopGlobalExpiryCheck();
+
+    // Check every 30 seconds
+    expiryCheckInterval = setInterval(() => {
+        checkSessionExpiry(provider);
+    }, 30000); // 30 seconds
+    
+    // Do an initial check right away
+    checkSessionExpiry(provider);
+}
+
+// Stop the global expiry check
+function stopGlobalExpiryCheck() {
+    if (expiryCheckInterval) {
+        clearInterval(expiryCheckInterval);
+        expiryCheckInterval = undefined;
+    }
+}
+
+// Check if the session is about to expire
+async function checkSessionExpiry(provider: CloudIdeWebviewProvider) {
+    if (!runnerState.session_end) {
+        return; // No session end time available yet
+    }
+
+    const now = new Date();
+    const sessionEnd = new Date(runnerState.session_end);
+    
+    // Calculate minutes remaining
+    const minutesRemaining = (sessionEnd.getTime() - now.getTime()) / (1000 * 60);
+    
+    // Show notification if less than expiry_notification_time minutes remaining
+    // but more than 0 minutes (not expired yet)
+    if (minutesRemaining > 0 && minutesRemaining < expiry_notification_time) {
+        // Execute the add time command directly - this will show the modal
+        vscode.commands.executeCommand("cloud-ide-extension.addTime", provider);
+    }
+
+    // Also update the webview if it's visible
+    provider.updateSessionTime();
+}
 
 // Webview Provider Implementation
 class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
-    private _expiryCheckInterval?: NodeJS.Timeout;
 
     constructor(private readonly _extensionUri: vscode.Uri) {}
 
@@ -94,24 +146,26 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
                     case 'addTime':
                         vscode.commands.executeCommand('cloud-ide-extension.addTime', this);
                         return;
-                    case 'getSessionEndTime':                        this._view?.webview.postMessage({
-                            command: 'updateSessionEndTime',
-                            sessionEndTime: runnerState.session_end,
-                            expiryNotificationTime: expiry_notification_time
-                        });
+                    case 'getSessionEndTime':
+                        this.updateSessionTime();
                         return;
                 }
             }
         );
 
-        this._view?.webview.postMessage({
-            command: 'updateSessionEndTime',
-            sessionEndTime: runnerState.session_end,
-            expiryNotificationTime: expiry_notification_time
-        });
-    
-        // Start the expiry check interval
-        this.startExpiryCheck();
+        // Update session time when view is first loaded
+        this.updateSessionTime();
+    }
+
+    // Update the session time in the webview
+    public updateSessionTime() {
+        if (this._view) {
+            this._view.webview.postMessage({
+                command: 'updateSessionEndTime',
+                sessionEndTime: runnerState.session_end,
+                expiryNotificationTime: expiry_notification_time
+            });
+        }
     }
 
     public refresh() {
@@ -130,60 +184,15 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
             
             // After refreshing the HTML, update the session end time
             setTimeout(() => {
-                this._view?.webview.postMessage({
-                    command: 'updateSessionEndTime',
-                    sessionEndTime: runnerState.session_end,
-                    expiryNotificationTime: expiry_notification_time
-                });
+                this.updateSessionTime();
             }, 500); // Small delay to ensure the webview is ready
         }
     }
 
     public dispose() {
-        if (this._expiryCheckInterval) {
-            clearInterval(this._expiryCheckInterval);
-            this._expiryCheckInterval = undefined;
-        }
+        // No interval to clear here anymore, as it's now handled globally
     }
 
-    // Start checking for session expiry
-    private startExpiryCheck() {
-        // Clear any existing interval
-        if (this._expiryCheckInterval) {
-            clearInterval(this._expiryCheckInterval);
-        }
-
-        // Check every 30 seconds
-        this._expiryCheckInterval = setInterval(() => {
-            this.checkSessionExpiry();
-        }, 30000); // 30 seconds
-        
-        // Do an initial check right away
-        this.checkSessionExpiry();
-    }
-
-    // Check if the session is about to expire
-    private checkSessionExpiry() {
-        if (!runnerState.session_end) {
-            return; // No session end time available yet
-        }
-
-        const now = new Date();
-        const sessionEnd = new Date(runnerState.session_end);
-        
-        // Calculate minutes remaining
-        const minutesRemaining = (sessionEnd.getTime() - now.getTime()) / (1000 * 60);
-        
-        // Show notification if less than expiry_notification_time minutes remaining
-        // but more than 0 minutes (not expired yet)
-        if (minutesRemaining > 0 && minutesRemaining < expiry_notification_time) {
-            // Round the minutes for display
-            const roundedMinutes = Math.ceil(minutesRemaining);
-            
-            vscode.commands.executeCommand("cloud-ide-extension.addTime");
-        }
-    }
-    
     private _getHtmlForWebview(styleUri: vscode.Uri, scriptUri: vscode.Uri) {
         // Read the HTML template file
         const htmlPath = path.join(this._extensionUri.fsPath, 'resources', 'webview.html');
@@ -281,7 +290,7 @@ export function registerCommands(context: vscode.ExtensionContext, provider: Clo
                 try {
                     
                     // Call the API to add 30 minutes (parameter is minutes * 2)
-                    const response = await addTime(60); // 60 represents 30 minutes in the API
+                    const response = await addTime(30);
                     const json = await response.json();
                     isModalActive = false;
                     // Update the runner data with the new session end time
@@ -340,4 +349,7 @@ export function registerCommands(context: vscode.ExtensionContext, provider: Clo
     );
 }
 
-export function deactivate() {}
+export function deactivate() {
+    // Make sure to clean up the interval when the extension is deactivated
+    stopGlobalExpiryCheck();
+}
