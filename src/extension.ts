@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getConfig, runnerState, expiry_notification_time, runnerConfig } from './data';
+import { getConfig, runnerState, expiryNotificationTime, runnerConfig } from './data';
 import { addTime, getDevServer, getRunnerInfo } from './api';
 
 // Global interval reference for session expiry checks
@@ -80,19 +80,19 @@ function stopGlobalExpiryCheck() {
 
 // Check if the session is about to expire
 async function checkSessionExpiry(provider: CloudIdeWebviewProvider) {
-    if (!runnerState.session_end) {
+    if (!runnerState.sessionEnd) {
         return; // No session end time available yet
     }
 
     const now = new Date();
-    const sessionEnd = new Date(runnerState.session_end);
+    const sessionEnd = new Date(runnerState.sessionEnd);
     
     // Calculate minutes remaining
     const minutesRemaining = (sessionEnd.getTime() - now.getTime()) / (1000 * 60);
     
     // Show notification if less than expiry_notification_time minutes remaining
     // but more than 0 minutes (not expired yet)
-    if (minutesRemaining > 0 && minutesRemaining < expiry_notification_time) {
+    if (minutesRemaining > 0 && minutesRemaining < expiryNotificationTime) {
         // Execute the add time command directly - this will show the modal
         vscode.commands.executeCommand("cloud-ide-extension.addTime", provider);
     }
@@ -162,8 +162,8 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
         if (this._view) {
             this._view.webview.postMessage({
                 command: 'updateSessionEndTime',
-                sessionEndTime: runnerState.session_end,
-                expiryNotificationTime: expiry_notification_time
+                sessionEndTime: runnerState.sessionEnd,
+                expiryNotificationTime: expiryNotificationTime
             });
         }
     }
@@ -240,7 +240,7 @@ async function updateRunnerData(): Promise<void> {
         const localSessionStart = new Date(utcSessionStart).toISOString();
         
         // Update the runner object with the converted times
-        runnerState.session_end = localSessionEnd;
+        runnerState.sessionEnd = localSessionEnd;
         
         return Promise.resolve();
     } catch (error) {
@@ -267,48 +267,55 @@ export function registerCommands(context: vscode.ExtensionContext, provider: Clo
                     // Reset the flag when the timeout occurs
                     isModalActive = false;
                     resolve(undefined); // Resolve with undefined to indicate timeout
-                }, expiry_notification_time * 60 * 1000); // Convert minutes to milliseconds
+                }, expiryNotificationTime * 60 * 1000); // Convert minutes to milliseconds
             });
-            
-            // Show a modal information message with only the "Add 30 Minutes" button
-            const messagePromise = vscode.window.showInformationMessage(
-                'Your session is about to expire. Would you like to add more time?',
-                { modal: true },
-                'Add 30 Minutes'
-            );
-            
-            // Race the message promise against the timeout promise
-            const selection = await Promise.race([messagePromise, timeoutPromise]);
-            
-            // If the dialog timed out, just return
-            if (!selection) {
-                return;
-            }
-            
-            // If the user clicked "Add 30 Minutes"
-            if (selection === 'Add 30 Minutes') {
-                try {
-                    
-                    // Call the API to add 30 minutes (parameter is minutes * 2)
-                    const response = await addTime(30);
-                    const json = await response.json();
-                    isModalActive = false;
-                    // Update the runner data with the new session end time
-                    await updateRunnerData();
-                    // Refresh the webview to show the updated time
-                    if (webviewProvider) {
-                        webviewProvider.refresh();
-                    } else if (provider) {
-                        provider.refresh();
+            if (new Date(new Date(runnerConfig.sessionStart).getTime() + runnerConfig.maxSessionTime * 60 * 1000).getTime() 
+                < new Date(new Date(runnerState.sessionEnd).getTime() + 60 * 60 * 1000).getTime()){
+                    const messagePromise = vscode.window.showInformationMessage(
+                        'Your session has exceeded its maximum lifetime. The IDE will shut down soon.',
+                        { modal: true },
+                        'OK'
+                    );
+            }else{
+                // Show a modal information message with only the "Add 30 Minutes" button
+                const messagePromise = vscode.window.showInformationMessage(
+                    'Your session is about to expire. Would you like to add more time?',
+                    { modal: true },
+                    'Add 30 Minutes'
+                );
+                
+                // Race the message promise against the timeout promise
+                const selection = await Promise.race([messagePromise, timeoutPromise]);
+                
+                // If the dialog timed out, just return
+                if (!selection) {
+                    return;
+                }
+                
+                // If the user clicked "Add 30 Minutes"
+                if (selection === 'Add 30 Minutes') {
+                    try {
+                        // Call the API to add 30 minutes (parameter is minutes * 2)
+                        const response = await addTime(30);
+                        const json = await response.json();
+                        isModalActive = false;
+                        // Update the runner data with the new session end time
+                        await updateRunnerData();
+                        // Refresh the webview to show the updated time
+                        if (webviewProvider) {
+                            webviewProvider.refresh();
+                        } else if (provider) {
+                            provider.refresh();
+                        }
+                        // Show confirmation to the user
+                        vscode.window.showInformationMessage('Successfully added 30 minutes to your session.');
+                    } catch (error) {
+                        console.error('Error adding time:', error);
+                        vscode.window.showErrorMessage('Failed to add time to your session.');
                     }
-                    
-                    // Show confirmation to the user
-                    vscode.window.showInformationMessage('Successfully added 30 minutes to your session.');
-                } catch (error) {
-                    console.error('Error adding time:', error);
-                    vscode.window.showErrorMessage('Failed to add time to your session.');
                 }
             }
+            
         }),
 
         vscode.commands.registerCommand('cloud-ide-extension.showInfo', async () => {

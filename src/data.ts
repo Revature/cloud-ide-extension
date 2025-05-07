@@ -11,7 +11,7 @@ interface runnerConfig {
 }
 
 interface runnerState {
-  session_end:string,
+  sessionEnd:string,
 }
 
 export let runnerConfig : runnerConfig =  {
@@ -25,11 +25,11 @@ export let runnerConfig : runnerConfig =  {
 }
 
 export let runnerState : runnerState = {
-  session_end:""
+  sessionEnd:""
 }
 
-export const expiry_notification_time = 10;
-export const add_time_amount = 30;
+export const expiryNotificationTime = 10;
+export const addTimeAmount = 30;
 
 export function getConfig() {
   try{
