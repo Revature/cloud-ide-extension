@@ -36,10 +36,8 @@ export async function activate(context: vscode.ExtensionContext) {
                 // First show the document in the editor
                 const editor = await vscode.window.showTextDocument(document);
                 // Then open the markdown preview
-                await vscode.commands.executeCommand('markdown.showPreview', document.uri);
-                // Close the text editor to leave only the preview visible
-                await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
-            }
+                await vscode.commands.executeCommand('markdown.showPreview');
+                }
         }else{
             let fileExists : boolean = fs.existsSync(runnerConfig.filePath);
             if(fileExists){
@@ -52,10 +50,8 @@ export async function activate(context: vscode.ExtensionContext) {
                     // First show the document in the editor
                     const editor = await vscode.window.showTextDocument(document);
                     // Then open the markdown preview
-                    await vscode.commands.executeCommand('markdown.showPreview', document.uri);
-                    // Close the text editor to leave only the preview visible
-                    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');    
-                
+                    await vscode.commands.executeCommand('markdown.showPreview');
+                                    
                 }else{
                     await vscode.window.showTextDocument(document);    
                 }
