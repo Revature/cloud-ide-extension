@@ -32,7 +32,13 @@ export async function activate(context: vscode.ExtensionContext) {
             let fileExists : boolean = fs.existsSync(defaultReadmePath);
             if(fileExists){
                 console.log("Opening default readme file")
-                await vscode.workspace.openTextDocument(defaultReadmePath);
+                const document = await vscode.workspace.openTextDocument(defaultReadmePath);
+                // First show the document in the editor
+                const editor = await vscode.window.showTextDocument(document);
+                // Then open the markdown preview
+                await vscode.commands.executeCommand('markdown.showPreview', document.uri);
+                // Close the text editor to leave only the preview visible
+                await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
             }
         }else{
             let fileExists : boolean = fs.existsSync(runnerConfig.filePath);
@@ -41,8 +47,15 @@ export async function activate(context: vscode.ExtensionContext) {
                 const filePath  = vscode.Uri.file(runnerConfig.filePath as string);
                 const document = await vscode.workspace.openTextDocument(filePath);
                 if(runnerConfig.filePath.includes(".md")){
+
                     const document = await vscode.workspace.openTextDocument(filePath);
+                    // First show the document in the editor
+                    const editor = await vscode.window.showTextDocument(document);
+                    // Then open the markdown preview
                     await vscode.commands.executeCommand('markdown.showPreview', document.uri);
+                    // Close the text editor to leave only the preview visible
+                    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');    
+                
                 }else{
                     await vscode.window.showTextDocument(document);    
                 }
