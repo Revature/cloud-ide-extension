@@ -16,9 +16,7 @@
         const message = event.data;
         
         if (message.command === 'updateSessionEndTime') {
-            console.log('Received session end time:', message.sessionEndTime);
-            console.log('Expiry notification time:', message.expiryNotificationTime);
-            
+                        
             sessionEndTime = new Date(message.sessionEndTime);
             
             // Store the expiry notification time in milliseconds
@@ -93,7 +91,6 @@
                 
                 // Add event listener to the button
                 addTimeBtn.addEventListener('click', () => {
-                    console.log('Add time button clicked');
                     vscode.postMessage({
                         command: 'addTime'
                     });
@@ -131,7 +128,6 @@
     
     function setupEventListeners() {
         document.getElementById('openDevServerBtn').addEventListener('click', () => {
-            console.log('Open dev server button clicked');
             vscode.postMessage({
                 command: 'openDevServer'
             });
