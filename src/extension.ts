@@ -363,7 +363,7 @@ export function registerCommands(context: vscode.ExtensionContext, provider: Clo
             
             const input = await vscode.window.showInputBox({
                 placeHolder: 'Enter a number',
-                prompt: 'Please enter your desired port number (such as 4200)',
+                prompt: 'Please enter your desired port number, such as 4200',
                 validateInput: (text) => {
                     // Validate that input contains only numbers
                     return /^\d+$/.test(text) ? null : 'Port must be a number.';
