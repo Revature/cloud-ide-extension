@@ -291,13 +291,21 @@ export function registerCommands(context: vscode.ExtensionContext, provider: Clo
                     resolve(undefined); // Resolve with undefined to indicate timeout
                 }, expiryNotificationTime * 60 * 1000); // Convert minutes to milliseconds
             });
-            if (new Date(new Date(runnerConfig.sessionStart).getTime() + runnerConfig.maxSessionTime * 60 * 1000).getTime() 
+            if (new Date(new Date(runnerConfig.sessionStart).getTime() + runnerConfig.maxSessionTime * 1000).getTime() 
                 < new Date(new Date(runnerState.sessionEnd).getTime() + 60 * 60 * 1000).getTime()){
                     const messagePromise = vscode.window.showInformationMessage(
                         'Your session has exceeded its maximum lifetime. The IDE will shut down soon.',
                         { modal: true },
                         'OK'
                     );
+
+                    // Race the message promise against the timeout promise
+                    const selection = await Promise.race([messagePromise, timeoutPromise]);
+                    
+                    // If the dialog timed out, just return
+                    if (!selection) {
+                        return;
+                    }
             }else{
                 // Show a modal information message with only the "Add 30 Minutes" button
                 const messagePromise = vscode.window.showInformationMessage(
@@ -312,6 +320,8 @@ export function registerCommands(context: vscode.ExtensionContext, provider: Clo
                 // If the dialog timed out, just return
                 if (!selection) {
                     return;
+                }else{
+                    isModalActive = false;
                 }
                 
                 // If the user clicked "Add 30 Minutes"
