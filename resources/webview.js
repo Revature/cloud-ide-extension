@@ -55,7 +55,7 @@
         
         // First, calculate and update the countdown display
         if (timeRemaining <= 0) {
-            document.getElementById('countdown').textContent = 'Session expired!';
+            document.getElementById('countdown').textContent = 'Your session will end now!';
             document.getElementById('countdown').classList.add('warning');
             clearInterval(countdownInterval);
         } else {
