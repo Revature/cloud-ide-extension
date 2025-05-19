@@ -31,7 +31,11 @@
       {
         "command": "cloud-ide-extension.openDevServer",
         "title": "Open Dev Server"
-      }
+      },
+      {
+        "command": "cloud-ide-extension.openRightPanel",
+        "title": "Open Cloud IDE Panel"
+    }
     ],
     "viewsContainers": {
       "activitybar": [

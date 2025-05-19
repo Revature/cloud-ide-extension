@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Assistant</title>
+    <link rel="stylesheet" href="${styleUri}">
+</head>
+<body>
+    <div class="container">
+        <!-- Welcome/No Content State -->
+        <div class="welcome-state" id="welcomeState">
+            <div class="welcome-icon">🤖</div>
+            <div class="welcome-title">AI Code Assistant</div>
+            <div class="welcome-subtitle">
+                Click "Analyze Code" below to get AI insights on your open file
+            </div>
+        </div>
+
+        <!-- No Editor State -->
+        <div class="no-editor" id="noEditor">
+            <div class="no-editor-icon">📄</div>
+            <div class="no-editor-title">No active editor</div>
+            <div class="no-editor-subtitle">
+                Open a file in the editor to analyze your code with AI
+            </div>
+        </div>
+
+        <!-- Analyze Button -->
+        <div class="analyze-section" id="analyzeSection">
+            <button class="analyze-button" onclick="analyzeWithAI()" id="analyzeButton">
+                <span class="button-text" id="analyzeButtonText">🤖 Analyze Code</span>
+                <span class="loading-spinner" id="loadingSpinner">⟳ Analyzing...</span>
+            </button>
+        </div>
+
+        <!-- AI Response -->
+        <div class="response-section" id="responseSection">
+            <div class="response-content" id="responseContent"></div>
+        </div>
+    </div>
+
+    <script src="${scriptUri}"></script>
+</body>
+</html>

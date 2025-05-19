@@ -1,3 +1,4 @@
+/* Base styles for the entire project */
 body {
     padding: 10px;
     font-family: var(--vscode-font-family);
@@ -6,6 +7,7 @@ body {
     font-size: 11px; /* Reduced base font size for everything */
 }
 
+/* Section styles */
 .section {
     border: 1px solid var(--vscode-panel-border);
     border-radius: 4px;
@@ -25,6 +27,7 @@ body {
     letter-spacing: 0.5px;
 }
 
+/* Button styles */
 .button {
     background-color: var(--vscode-button-background);
     color: var(--vscode-button-foreground);
@@ -39,6 +42,7 @@ body {
     background-color: var(--vscode-button-hoverBackground);
 }
 
+/* Countdown and warning styles */
 .countdown {
     padding: 5px; /* Reduced padding */
     margin: 3px 0; /* Reduced margin */
@@ -57,7 +61,7 @@ body {
     margin-bottom: 3px; /* Reduced margin */
 }
 
-/* New class for small informational text */
+/* Small info text */
 .small-info {
     font-size: 9px; /* Made even smaller */
     color: var(--vscode-descriptionForeground);
@@ -65,6 +69,7 @@ body {
     margin-top: 3px; /* Reduced margin */
 }
 
+/* Footer styles */
 .footer {
     position: relative;
     bottom: 0;
@@ -89,4 +94,276 @@ body {
 .info-link:hover {
     color: var(--vscode-textLink-activeForeground);
     text-decoration: underline;
+}
+
+/* Right Panel (Assistant) specific styles */
+.container {
+    width: 100%;
+    padding: 8px;
+    max-width: 100%;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    font-family: var(--vscode-font-family);
+    color: var(--vscode-foreground);
+    background-color: var(--vscode-editor-background);
+}
+
+.header {
+    border-bottom: 1px solid var(--vscode-panel-border);
+    padding-bottom: 8px;
+    margin-bottom: 12px;
+}
+
+.file-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.file-name {
+    font-weight: bold;
+    color: var(--vscode-textLink-foreground);
+    font-size: 12px;
+}
+
+.language-badge {
+    background-color: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+    padding: 2px 6px;
+    border-radius: 2px;
+    font-size: 9px;
+    text-transform: uppercase;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.stat-item {
+    background-color: var(--vscode-editor-background);
+    padding: 6px;
+    border-radius: 4px;
+    text-align: center;
+    border: 1px solid var(--vscode-panel-border);
+}
+
+.stat-value {
+    display: block;
+    font-weight: bold;
+    color: var(--vscode-textLink-foreground);
+    font-size: 14px;
+}
+
+.stat-label {
+    display: block;
+    font-size: 9px;
+    color: var(--vscode-descriptionForeground);
+    margin-top: 2px;
+}
+
+.content-area {
+    background-color: var(--vscode-textCodeBlock-background);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 4px;
+    padding: 8px;
+    margin: 8px 0;
+    overflow: auto;
+    max-height: calc(100vh - 200px);
+}
+
+.editor-content {
+    font-family: var(--vscode-editor-font-family);
+    font-size: var(--vscode-editor-font-size);
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    color: var(--vscode-editor-foreground);
+}
+
+.no-editor {
+    text-align: center;
+    color: var(--vscode-descriptionForeground);
+    font-style: italic;
+    padding: 24px 16px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.no-editor-icon {
+    font-size: 20px;
+    margin-bottom: 8px;
+}
+
+.no-editor-title {
+    font-size: 11px;
+    margin-bottom: 4px;
+}
+
+.no-editor-subtitle {
+    font-size: 9px;
+    margin-top: 6px;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.action-buttons .button {
+    flex: 1;
+    padding: 4px 8px;
+}
+
+/* AI Assistant specific styles */
+.welcome-state {
+    text-align: center;
+    padding: 16px;
+    margin-bottom: 12px;
+}
+
+.welcome-icon {
+    font-size: 24px;
+    margin-bottom: 8px;
+}
+
+.welcome-title {
+    font-size: 11px;
+    font-weight: bold;
+    margin-bottom: 4px;
+    color: var(--vscode-foreground);
+}
+
+.welcome-subtitle {
+    font-size: 9px;
+    color: var(--vscode-descriptionForeground);
+    line-height: 1.5;
+}
+
+.analyze-section {
+    padding: 8px 0;
+    text-align: center;
+    border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.analyze-button {
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    min-width: 140px;
+}
+
+.analyze-button:hover:not(:disabled) {
+    background-color: var(--vscode-button-hoverBackground);
+}
+
+.analyze-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.analyze-button.loading {
+    background-color: var(--vscode-button-secondaryBackground);
+}
+
+.loading-spinner {
+    display: none;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.response-section {
+    flex: 1;
+    padding: 12px 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.response-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.response-header h3 {
+    margin: 0;
+    font-size: 11px;
+    font-weight: bold;
+    color: var(--vscode-foreground);
+}
+
+.copy-button {
+    background-color: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    border: 1px solid var(--vscode-button-border);
+    padding: 4px 8px;
+    border-radius: 2px;
+    cursor: pointer;
+    font-size: 9px;
+    transition: background-color 0.2s;
+}
+
+.copy-button:hover {
+    background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+.response-content {
+    background-color: var(--vscode-input-background);
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 4px;
+    padding: 8px;
+    white-space: pre-wrap;
+    font-family: var(--vscode-editor-font-family);
+    font-size: 10px;
+    line-height: 1.6;
+    color: var(--vscode-foreground);
+    overflow-y: auto;
+    flex: 1;
+    min-height: 120px;
+}
+
+.response-content:empty::before {
+    content: "Analysis will appear here...";
+    color: var(--vscode-descriptionForeground);
+    font-style: italic;
+}
+
+.response-content.loading-text {
+    font-style: italic;
+    color: var(--vscode-descriptionForeground);
+}
+
+/* Utility classes */
+.hidden {
+    display: none;
+}
+
+/* Line numbers for code display */
+.line-numbers {
+    user-select: none;
+    color: var(--vscode-editorLineNumber-foreground);
+    margin-right: 8px;
+    display: inline-block;
+    text-align: right;
+    min-width: 24px;
 }

@@ -7,7 +7,9 @@ interface runnerConfig {
   maxSessionTime:number,
   sessionStart:string,
   userId:number,
-  filePath:string | null
+  filePath:string | null,
+  oaiKey: string | null,
+  ollamaKey: string | null
 }
 
 interface runnerState {
@@ -21,7 +23,9 @@ export let runnerConfig : runnerConfig =  {
   maxSessionTime: 0,
   sessionStart: '',
   userId: 0,
-  filePath: null
+  filePath: null,
+  oaiKey: null,
+  ollamaKey: null
 }
 
 export let runnerState : runnerState = {
