@@ -1,6 +1,6 @@
 // src/testing/testRunner.ts
 import * as vscode from 'vscode';
-import * as child_process from 'child_process';
+import { spawn } from 'child_process';
 import { TestCase } from './testDetector';
 
 export interface TestResult {
@@ -43,7 +43,7 @@ export class TestRunner {
             const shellArgs = isWindows ? ['/c'] : ['-c'];
             
             return new Promise((resolve) => {
-                const childProcess = child_process.spawn(shell, [...shellArgs, command], {
+                const childProcess = spawn(shell, [...shellArgs, command], {
                     cwd: workspacePath,
                     stdio: ['pipe', 'pipe', 'pipe']
                 });

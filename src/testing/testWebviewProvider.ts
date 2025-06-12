@@ -1,7 +1,5 @@
-// src/testing/testWebviewProvider.ts
+// src/testing/testWebviewProvider.ts - Theia-compatible version
 import * as vscode from 'vscode';
-import * as fs from 'fs';
-import * as path from 'path';
 import { TestDetectorService, ProjectTestInfo, TestCase } from './testDetector';
 import { TestRunner, TestRunResult } from './testRunner';
 
@@ -210,13 +208,21 @@ export class TestWebviewProvider implements vscode.WebviewViewProvider {
     }
 
     private _getHtmlForWebview(webview: vscode.Webview) {
-        const styleUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this._extensionUri, 'resources', 'styling.css')
-        );
-        
-        const scriptUri = webview.asWebviewUri(
-            vscode.Uri.joinPath(this._extensionUri, 'resources', 'test-webview.js')
-        );
+        // Try to get resource URIs, but fall back to inline styles/scripts if they fail
+        let styleUri: string;
+        let scriptContent: string;
+
+        try {
+            styleUri = webview.asWebviewUri(
+                vscode.Uri.joinPath(this._extensionUri, 'resources', 'styling.css')
+            ).toString();
+        } catch (error) {
+            console.warn('Could not create style URI, using inline styles');
+            styleUri = '';
+        }
+
+        // Inline the JavaScript to avoid URI issues
+        scriptContent = this._getInlineScript();
 
         return `<!DOCTYPE html>
             <html lang="en">
@@ -224,7 +230,7 @@ export class TestWebviewProvider implements vscode.WebviewViewProvider {
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <title>Test Runner</title>
-                <link rel="stylesheet" href="${styleUri}">
+                ${styleUri ? `<link rel="stylesheet" href="${styleUri}">` : this._getInlineStyles()}
             </head>
             <body>
                 <div class="container">
@@ -303,9 +309,113 @@ export class TestWebviewProvider implements vscode.WebviewViewProvider {
                     </div>
                 </div>
 
-                <script src="${scriptUri}"></script>
+                <script>
+                    ${scriptContent}
+                </script>
             </body>
             </html>`;
+    }
+
+    private _getInlineStyles(): string {
+        return `<style>
+            body { padding: 10px; font-family: var(--vscode-font-family); color: var(--vscode-foreground); margin: 0; font-size: 11px; }
+            .section { border: 1px solid var(--vscode-panel-border); border-radius: 4px; margin-bottom: 12px; padding: 8px; background-color: var(--vscode-editor-background); }
+            .section-title { font-size: 10px; font-weight: bold; text-transform: uppercase; color: var(--vscode-descriptionForeground); margin: 0 0 6px 0; padding-bottom: 4px; border-bottom: 1px solid var(--vscode-panel-border); letter-spacing: 0.5px; }
+            .button { background-color: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; padding: 3px 8px; cursor: pointer; border-radius: 2px; font-size: 11px; }
+            .button:hover { background-color: var(--vscode-button-hoverBackground); }
+            .button:disabled { opacity: 0.6; cursor: not-allowed; }
+            .test-header { display: flex; gap: 8px; margin-bottom: 8px; }
+            .test-header .button { flex: 1; font-size: 10px; padding: 4px 8px; }
+            .loading-spinner { text-align: center; padding: 16px; color: var(--vscode-descriptionForeground); font-style: italic; }
+            .no-tests { text-align: center; padding: 24px 16px; color: var(--vscode-descriptionForeground); }
+            .no-tests-icon { font-size: 32px; margin-bottom: 12px; }
+            .no-tests-title { font-size: 12px; font-weight: bold; margin-bottom: 6px; color: var(--vscode-foreground); }
+            .no-tests-subtitle { font-size: 10px; line-height: 1.4; }
+            .project-info { background-color: var(--vscode-textCodeBlock-background); border: 1px solid var(--vscode-panel-border); border-radius: 4px; padding: 8px; }
+            .info-item { font-size: 10px; margin-bottom: 4px; display: flex; justify-content: space-between; }
+            .error-message { text-align: center; padding: 16px; color: var(--vscode-errorForeground); background-color: var(--vscode-inputValidation-errorBackground); border: 1px solid var(--vscode-inputValidation-errorBorder); border-radius: 4px; }
+        </style>`;
+    }
+
+    private _getInlineScript(): string {
+        return `
+            (function() {
+                const vscode = acquireVsCodeApi();
+                let currentData = {};
+
+                const refreshBtn = document.getElementById('refreshBtn');
+                const runAllBtn = document.getElementById('runAllBtn');
+                
+                refreshBtn.addEventListener('click', () => {
+                    vscode.postMessage({ command: 'refresh' });
+                });
+
+                runAllBtn.addEventListener('click', () => {
+                    vscode.postMessage({ command: 'runAllTests' });
+                });
+
+                window.addEventListener('message', event => {
+                    const message = event.data;
+                    if (message.command === 'updateTestData') {
+                        currentData = message.data;
+                        updateUI();
+                    }
+                });
+
+                function updateUI() {
+                    // Simple UI update logic
+                    const sections = ['loadingSection', 'runningSection', 'noWorkspaceSection', 'noTestsSection', 'projectInfoSection', 'resultsSection', 'testCasesSection', 'errorSection'];
+                    sections.forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) el.style.display = 'none';
+                    });
+
+                    refreshBtn.disabled = false;
+                    runAllBtn.disabled = true;
+
+                    if (currentData.isLoading) {
+                        document.getElementById('loadingSection').style.display = 'block';
+                        refreshBtn.disabled = true;
+                        return;
+                    }
+
+                    if (currentData.isRunning) {
+                        document.getElementById('runningSection').style.display = 'block';
+                        refreshBtn.disabled = true;
+                        return;
+                    }
+
+                    if (currentData.error) {
+                        document.getElementById('errorSection').style.display = 'block';
+                        document.getElementById('errorText').textContent = currentData.error;
+                        return;
+                    }
+
+                    if (!currentData.hasWorkspace) {
+                        document.getElementById('noWorkspaceSection').style.display = 'block';
+                        return;
+                    }
+
+                    if (!currentData.projectInfo || !currentData.projectInfo.hasTests) {
+                        document.getElementById('noTestsSection').style.display = 'block';
+                        const msg = currentData.projectInfo ? 
+                            'No test cases found for ' + currentData.projectInfo.projectType + ' project' :
+                            'Project type not supported';
+                        document.getElementById('noTestsMessage').textContent = msg;
+                        return;
+                    }
+
+                    document.getElementById('projectInfoSection').style.display = 'block';
+                    document.getElementById('projectType').textContent = currentData.projectInfo.projectType.toUpperCase();
+                    document.getElementById('testFramework').textContent = currentData.projectInfo.testFramework;
+                    document.getElementById('totalTests').textContent = currentData.projectInfo.testCases.length;
+                    runAllBtn.disabled = false;
+                }
+
+                // Initial load
+                vscode.postMessage({ command: 'detectTests' });
+            })();
+        `;
     }
 
     dispose() {
