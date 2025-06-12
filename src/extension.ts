@@ -7,8 +7,9 @@ import { registerDevServerCommands } from './devserver';
 import { registerAssistantCommands } from './assistant';
 import { registerInfoCommands } from './info';
 import { handleStartupFile } from './startup';
-import { TestWebviewProvider } from './testing/testWebviewProvider';
 import { registerTestCommands } from './testing/testCommands';
+import { TestDetectorService, ProjectTestInfo } from './testing/testDetector';
+import { TestRunner } from './testing/testRunner';
 
 export async function activate(context: vscode.ExtensionContext) {
     // Create and register webview panel provider
@@ -19,18 +20,11 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.window.registerWebviewViewProvider('cloudIdeWebview', provider)
     );
 
-    // Register test functionality
-    const testProvider = new TestWebviewProvider(context.extensionUri);
-    context.subscriptions.push(
-        vscode.window.registerWebviewViewProvider('cloudIdeTestView', testProvider)
-    );
-
     // Register all commands from different modules
     registerSessionCommands(context, provider);
     registerDevServerCommands(context);
     registerAssistantCommands(context);
     registerInfoCommands(context);
-    // Register test commands
     registerTestCommands(context);
 
     getConfig();
@@ -54,11 +48,17 @@ export async function activate(context: vscode.ExtensionContext) {
     });
 }
 
-// Webview Provider Implementation (your existing sidebar webview)
+// Unified Webview Provider Implementation
 class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
+    private testDetectorService: TestDetectorService;
+    private testRunner: TestRunner;
+    private currentProjectInfo?: ProjectTestInfo;
 
-    constructor(private readonly _extensionUri: vscode.Uri) {}
+    constructor(private readonly _extensionUri: vscode.Uri) {
+        this.testDetectorService = new TestDetectorService();
+        this.testRunner = new TestRunner();
+    }
 
     resolveWebviewView(
         webviewView: vscode.WebviewView,
@@ -87,8 +87,9 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
     
         // Handle messages from the webview
         webviewView.webview.onDidReceiveMessage(
-            message => {
+            async message => {
                 switch (message.command) {
+                    // Session management commands
                     case 'openDevServer':
                         vscode.commands.executeCommand('cloud-ide-extension.openDevServer');
                         return;
@@ -101,15 +102,35 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
                     case 'getSessionEndTime':
                         this.updateSessionTime();
                         return;
+                    
+                    // Test management commands
+                    case 'detectTests':
+                        await this.detectTests();
+                        return;
+                    case 'refreshTests':
+                        await this.detectTests();
+                        return;
+                    case 'runAllTests':
+                        await this.runAllTests();
+                        return;
+                    case 'runTest':
+                        await this.runSingleTest(message.testCase);
+                        return;
+                    case 'runTestClass':
+                        await this.runTestClass(message.className);
+                        return;
                 }
             }
         );
 
         // Update session time when view is first loaded
         this.updateSessionTime();
+        
+        // Initialize test detection
+        this.detectTests();
     }
 
-    // Update the session time in the webview
+    // Session Management Methods
     public updateSessionTime() {
         if (this._view) {
             this._view.webview.postMessage({
@@ -134,15 +155,165 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
             // Update the HTML with the current CSS and JS paths
             this._view.webview.html = this._getHtmlForWebview(styleMainUri, scriptUri);
             
-            // After refreshing the HTML, update the session end time
+            // After refreshing the HTML, update the session end time and test data
             setTimeout(() => {
                 this.updateSessionTime();
-            }, 500); // Small delay to ensure the webview is ready
+                this.detectTests();
+            }, 500);
+        }
+    }
+
+    // Test Management Methods
+    private async detectTests() {
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (!workspaceFolders || workspaceFolders.length === 0) {
+            this.updateTestWebview({
+                hasWorkspace: false,
+                projectInfo: undefined,
+                isLoading: false
+            });
+            return;
+        }
+
+        this.updateTestWebview({ isLoading: true });
+
+        try {
+            const workspacePath = workspaceFolders[0].uri.fsPath;
+            this.currentProjectInfo = await this.testDetectorService.detectProjectTests(workspacePath);
+            
+            this.updateTestWebview({
+                hasWorkspace: true,
+                projectInfo: this.currentProjectInfo,
+                isLoading: false
+            });
+        } catch (error) {
+            console.error('Error detecting tests:', error);
+            this.updateTestWebview({
+                hasWorkspace: true,
+                projectInfo: undefined,
+                isLoading: false,
+                error: error instanceof Error ? error.message : 'Unknown error'
+            });
+        }
+    }
+
+    private async runAllTests() {
+        if (!this.currentProjectInfo || !this.currentProjectInfo.hasTests) {
+            vscode.window.showWarningMessage('No tests found to run');
+            return;
+        }
+
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (!workspaceFolders) return;
+
+        this.updateTestWebview({ isRunning: true });
+
+        try {
+            const detector = this.testDetectorService.getDetectorForProject(this.currentProjectInfo.projectType);
+            if (!detector) {
+                throw new Error(`No test runner available for ${this.currentProjectInfo.projectType} projects`);
+            }
+
+            const command = detector.getRunAllCommand();
+            const result = await this.testRunner.runTests(command, workspaceFolders[0].uri.fsPath);
+            
+            this.updateTestWebview({ 
+                isRunning: false,
+                lastResult: result
+            });
+
+            if (result.success) {
+                vscode.window.showInformationMessage(
+                    `✅ All tests passed! (${result.passed}/${result.totalTests})`
+                );
+            } else {
+                vscode.window.showErrorMessage(
+                    `❌ Tests failed! (${result.passed} passed, ${result.failed} failed)`
+                );
+            }
+        } catch (error) {
+            this.updateTestWebview({ isRunning: false });
+            vscode.window.showErrorMessage(`Failed to run tests: ${error}`);
+        }
+    }
+
+    private async runSingleTest(testCase: any) {
+        if (!this.currentProjectInfo) return;
+
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (!workspaceFolders) return;
+
+        this.updateTestWebview({ isRunning: true });
+
+        try {
+            const detector = this.testDetectorService.getDetectorForProject(this.currentProjectInfo.projectType);
+            if (!detector) {
+                throw new Error(`No test runner available for ${this.currentProjectInfo.projectType} projects`);
+            }
+
+            const command = detector.getRunSingleTestCommand(testCase);
+            const result = await this.testRunner.runTests(command, workspaceFolders[0].uri.fsPath);
+            
+            this.updateTestWebview({ 
+                isRunning: false,
+                lastResult: result
+            });
+
+            if (result.success) {
+                vscode.window.showInformationMessage(`✅ Test ${testCase.name} passed!`);
+            } else {
+                vscode.window.showErrorMessage(`❌ Test ${testCase.name} failed!`);
+            }
+        } catch (error) {
+            this.updateTestWebview({ isRunning: false });
+            vscode.window.showErrorMessage(`Failed to run test: ${error}`);
+        }
+    }
+
+    private async runTestClass(className: string) {
+        if (!this.currentProjectInfo) return;
+
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (!workspaceFolders) return;
+
+        this.updateTestWebview({ isRunning: true });
+
+        try {
+            const detector = this.testDetectorService.getDetectorForProject(this.currentProjectInfo.projectType);
+            if (!detector) {
+                throw new Error(`No test runner available for ${this.currentProjectInfo.projectType} projects`);
+            }
+
+            const command = detector.getRunClassCommand(className);
+            const result = await this.testRunner.runTests(command, workspaceFolders[0].uri.fsPath);
+            
+            this.updateTestWebview({ 
+                isRunning: false,
+                lastResult: result
+            });
+
+            if (result.success) {
+                vscode.window.showInformationMessage(`✅ Test class ${className} passed!`);
+            } else {
+                vscode.window.showErrorMessage(`❌ Test class ${className} failed!`);
+            }
+        } catch (error) {
+            this.updateTestWebview({ isRunning: false });
+            vscode.window.showErrorMessage(`Failed to run test class: ${error}`);
+        }
+    }
+
+    private updateTestWebview(data: any) {
+        if (this._view) {
+            this._view.webview.postMessage({
+                command: 'updateTestData',
+                data: data
+            });
         }
     }
 
     public dispose() {
-        // No interval to clear here anymore, as it's now handled globally
+        this.testRunner.dispose();
     }
 
     private _getHtmlForWebview(styleUri: vscode.Uri, scriptUri: vscode.Uri) {
@@ -165,7 +336,7 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
             <html>
               <head>
                 <meta charset="UTF-8">
-                <title>Cloud IDE</title>
+                <title>Cloud IDE Hub</title>
               </head>
               <body>
                 <div>

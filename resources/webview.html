@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cloud IDE</title>
+    <title>Cloud IDE Hub</title>
     <link rel="stylesheet" href="${styleUri}">
 </head>
 <body>
@@ -14,8 +14,81 @@
             <div id="countdown" class="countdown">Loading...</div>
             <div id="endTimeDisplay"></div>
             <div id="sessionManagementContainer">
-                <!-- This is where we'll add either the button or info text via JavaScript -->
                 <div id="sessionInfo">Loading session information...</div>
+            </div>
+        </div>
+        
+        <!-- Test Runner Section -->
+        <div class="section test-section">
+            <div class="section-title">Test Runner</div>
+            <div class="test-header">
+                <button class="button" id="refreshTestsBtn">🔄 Refresh</button>
+                <button class="button" id="runAllTestsBtn" disabled>▶️ Run All Tests</button>
+            </div>
+
+            <!-- Test Loading State -->
+            <div id="testLoadingSection" style="display: none;">
+                <div class="loading-spinner">🔄 Detecting tests...</div>
+            </div>
+
+            <!-- Test Running State -->
+            <div id="testRunningSection" style="display: none;">
+                <div class="loading-spinner">⚡ Running tests...</div>
+            </div>
+
+            <!-- No Workspace State -->
+            <div id="testNoWorkspaceSection" style="display: none;">
+                <div class="no-tests">
+                    <div class="no-tests-icon">📁</div>
+                    <div class="no-tests-title">No workspace found</div>
+                    <div class="no-tests-subtitle">Open a folder to detect tests</div>
+                </div>
+            </div>
+
+            <!-- No Tests State -->
+            <div id="testNoTestsSection" style="display: none;">
+                <div class="no-tests">
+                    <div class="no-tests-icon">🧪</div>
+                    <div class="no-tests-title">No tests found</div>
+                    <div class="no-tests-subtitle" id="testNoTestsMessage">
+                        No test files detected in the current workspace
+                    </div>
+                </div>
+            </div>
+
+            <!-- Project Info Section -->
+            <div id="testProjectInfoSection" style="display: none;">
+                <div class="project-info">
+                    <div class="info-item">
+                        <strong>Project Type:</strong> <span id="testProjectType"></span>
+                    </div>
+                    <div class="info-item">
+                        <strong>Test Framework:</strong> <span id="testFramework"></span>
+                    </div>
+                    <div class="info-item">
+                        <strong>Total Tests:</strong> <span id="testTotalTests"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Test Results Section -->
+            <div id="testResultsSection" style="display: none;">
+                <div class="section-title">Last Test Results</div>
+                <div class="test-results" id="testResults"></div>
+            </div>
+
+            <!-- Test Cases Section -->
+            <div id="testCasesSection" style="display: none;">
+                <div class="section-title">Test Cases</div>
+                <div class="test-cases" id="testCasesList"></div>
+            </div>
+
+            <!-- Test Error Section -->
+            <div id="testErrorSection" style="display: none;">
+                <div class="error-message">
+                    <div class="error-icon">❌</div>
+                    <div class="error-text" id="testErrorText"></div>
+                </div>
             </div>
         </div>
         

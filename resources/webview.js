@@ -3,109 +3,149 @@
     let countdownInterval;
     let sessionEndTime;
     let expiryNotificationTime;
+    let currentTestData = {};
     
-    // Add log to show script is running
+    // Session Management Elements
+    const sessionInfo = document.getElementById('sessionInfo');
+    const countdown = document.getElementById('countdown');
+    const endTimeDisplay = document.getElementById('endTimeDisplay');
+    const sessionManagementContainer = document.getElementById('sessionManagementContainer');
+    
+    // Test Elements
+    const refreshTestsBtn = document.getElementById('refreshTestsBtn');
+    const runAllTestsBtn = document.getElementById('runAllTestsBtn');
+    const testLoadingSection = document.getElementById('testLoadingSection');
+    const testRunningSection = document.getElementById('testRunningSection');
+    const testNoWorkspaceSection = document.getElementById('testNoWorkspaceSection');
+    const testNoTestsSection = document.getElementById('testNoTestsSection');
+    const testProjectInfoSection = document.getElementById('testProjectInfoSection');
+    const testResultsSection = document.getElementById('testResultsSection');
+    const testCasesSection = document.getElementById('testCasesSection');
+    const testErrorSection = document.getElementById('testErrorSection');
+    
+    const testProjectType = document.getElementById('testProjectType');
+    const testFramework = document.getElementById('testFramework');
+    const testTotalTests = document.getElementById('testTotalTests');
+    const testResults = document.getElementById('testResults');
+    const testCasesList = document.getElementById('testCasesList');
+    const testErrorText = document.getElementById('testErrorText');
+    const testNoTestsMessage = document.getElementById('testNoTestsMessage');
+
+    // Browser Elements
+    const openDevServerBtn = document.getElementById('openDevServerBtn');
+    const showInfoBtn = document.getElementById('showInfoBtn');
+    
     console.log('Webview script initialized');
     
     // Request the session end time as soon as the webview loads
     vscode.postMessage({
         command: 'getSessionEndTime'
     });
+
+    // Request initial test data
+    vscode.postMessage({
+        command: 'detectTests'
+    });
     
+    // Session Management Event Listeners
     window.addEventListener('message', event => {
         const message = event.data;
         
         if (message.command === 'updateSessionEndTime') {
-                        
             sessionEndTime = new Date(message.sessionEndTime);
             
-            // Store the expiry notification time in milliseconds
             if (message.expiryNotificationTime) {
-                // Convert minutes to milliseconds for comparison
                 expiryNotificationTime = message.expiryNotificationTime * 60 * 1000;
             } else {
-                // Default to 10 minutes if not provided
                 expiryNotificationTime = 10 * 60 * 1000;
             }
             
-            // Update end time display
-            const endTimeDisplay = document.getElementById('endTimeDisplay');
             endTimeDisplay.textContent = 'Ends at: ' + sessionEndTime.toLocaleString();
             
-            // Clear any existing interval
             if (countdownInterval) {
                 clearInterval(countdownInterval);
             }
             
-            // Start the countdown
             updateCountdown();
             countdownInterval = setInterval(updateCountdown, 1000);
         }
+        
+        // Handle test data updates
+        if (message.command === 'updateTestData') {
+            currentTestData = message.data;
+            updateTestUI();
+        }
+    });
+
+    // Test Event Listeners
+    refreshTestsBtn.addEventListener('click', () => {
+        vscode.postMessage({ command: 'refreshTests' });
+    });
+
+    runAllTestsBtn.addEventListener('click', () => {
+        vscode.postMessage({ command: 'runAllTests' });
+    });
+
+    // Browser and Info Event Listeners
+    openDevServerBtn.addEventListener('click', () => {
+        vscode.postMessage({
+            command: 'openDevServer'
+        });
     });
     
+    showInfoBtn.addEventListener('click', () => {
+        console.log('Show info button clicked');
+        vscode.postMessage({
+            command: 'showInfo'
+        });
+    });
+
+    // Session Management Functions
     function updateCountdown() {
         if (!sessionEndTime) return;
         
         const now = new Date();
         const timeRemaining = sessionEndTime - now;
         
-        // Get the session management container
-        const sessionManagementContainer = document.getElementById('sessionManagementContainer');
-        const sessionInfo = document.getElementById('sessionInfo');
-        
-        // First, calculate and update the countdown display
         if (timeRemaining <= 0) {
-            document.getElementById('countdown').textContent = 'Your session will end now!';
-            document.getElementById('countdown').classList.add('warning');
+            countdown.textContent = 'Your session will end now!';
+            countdown.classList.add('warning');
             clearInterval(countdownInterval);
         } else {
-            // Calculate hours, minutes, and seconds
             const hours = Math.floor(timeRemaining / (1000 * 60 * 60));
             const minutes = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
             const seconds = Math.floor((timeRemaining % (1000 * 60)) / 1000);
             
-            // Format the countdown
             const formattedTime = 
                 (hours > 0 ? hours + ' hours, ' : '') + 
                 (minutes < 10 ? '0' : '') + minutes + ':' + 
                 (seconds < 10 ? '0' : '') + seconds;
             
-            document.getElementById('countdown').textContent = "Session will end in: " + formattedTime;
+            countdown.textContent = "Session will end in: " + formattedTime;
         }
         
-        // Now update the session management section (button or info text)
         if (timeRemaining <= 0 || timeRemaining <= expiryNotificationTime) {
-            // Session is expired or about to expire - show button
-            
-            // Check if button already exists
             let addTimeBtn = document.getElementById('addTimeBtn');
             
             if (!addTimeBtn) {
-                // Button doesn't exist yet, create it
-                sessionInfo.innerHTML = ''; // Clear the info text
+                sessionInfo.innerHTML = '';
                 
                 addTimeBtn = document.createElement('button');
                 addTimeBtn.id = 'addTimeBtn';
                 addTimeBtn.className = 'button';
                 addTimeBtn.textContent = 'Time Management';
                 
-                // Add event listener to the button
                 addTimeBtn.addEventListener('click', () => {
                     vscode.postMessage({
                         command: 'addTime'
                     });
                 });
                 
-                // Add the button to the container
                 sessionManagementContainer.appendChild(addTimeBtn);
             }
             
-            // Add warning class to countdown when time is running out
-            document.getElementById('countdown').classList.add('warning');
+            countdown.classList.add('warning');
         } else {
-            // Session has plenty of time left - show info text
-            
-            // Check if button exists and remove it
             const addTimeBtn = document.getElementById('addTimeBtn');
             if (addTimeBtn) {
                 addTimeBtn.remove();
@@ -113,31 +153,196 @@
             
             const minutesBeforeExpiry = Math.ceil(expiryNotificationTime / (60 * 1000));
             sessionInfo.textContent = `You will be able to extend your session ${minutesBeforeExpiry} minutes before it expires.`;
-            sessionInfo.className = 'small-info'; // Apply the CSS class
-            // Remove warning class when there's plenty of time
-            document.getElementById('countdown').classList.remove('warning');
+            sessionInfo.className = 'small-info';
+            countdown.classList.remove('warning');
         }
     }
-    
-    // Alternative way to set up event listeners if DOMContentLoaded might have already fired
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', setupEventListeners);
-    } else {
-        setupEventListeners();
+
+    // Test Management Functions
+    function updateTestUI() {
+        hideAllTestSections();
+
+        if (currentTestData.isLoading) {
+            testLoadingSection.style.display = 'block';
+            refreshTestsBtn.disabled = true;
+            runAllTestsBtn.disabled = true;
+            return;
+        }
+
+        if (currentTestData.isRunning) {
+            testRunningSection.style.display = 'block';
+            refreshTestsBtn.disabled = true;
+            runAllTestsBtn.disabled = true;
+            return;
+        }
+
+        refreshTestsBtn.disabled = false;
+
+        if (currentTestData.error) {
+            testErrorSection.style.display = 'block';
+            testErrorText.textContent = currentTestData.error;
+            return;
+        }
+
+        if (!currentTestData.hasWorkspace) {
+            testNoWorkspaceSection.style.display = 'block';
+            runAllTestsBtn.disabled = true;
+            return;
+        }
+
+        if (!currentTestData.projectInfo) {
+            testNoTestsSection.style.display = 'block';
+            testNoTestsMessage.textContent = 'Project type not supported or no test configuration found';
+            runAllTestsBtn.disabled = true;
+            return;
+        }
+
+        const projectInfo = currentTestData.projectInfo;
+
+        if (!projectInfo.hasTests || projectInfo.testCases.length === 0) {
+            testNoTestsSection.style.display = 'block';
+            testNoTestsMessage.textContent = `No test cases found for ${projectInfo.projectType} project using ${projectInfo.testFramework}`;
+            runAllTestsBtn.disabled = true;
+            return;
+        }
+
+        testProjectInfoSection.style.display = 'block';
+        testProjectType.textContent = projectInfo.projectType.toUpperCase();
+        testFramework.textContent = projectInfo.testFramework;
+        testTotalTests.textContent = projectInfo.testCases.length;
+        runAllTestsBtn.disabled = false;
+
+        if (currentTestData.lastResult) {
+            showTestResults(currentTestData.lastResult);
+        }
+
+        showTestCases(projectInfo.testCases);
     }
-    
-    function setupEventListeners() {
-        document.getElementById('openDevServerBtn').addEventListener('click', () => {
-            vscode.postMessage({
-                command: 'openDevServer'
-            });
+
+    function hideAllTestSections() {
+        const sections = [
+            testLoadingSection, testRunningSection, testNoWorkspaceSection, 
+            testNoTestsSection, testProjectInfoSection, testResultsSection, 
+            testCasesSection, testErrorSection
+        ];
+        sections.forEach(section => {
+            if (section) section.style.display = 'none';
         });
+    }
+
+    function showTestResults(result) {
+        testResultsSection.style.display = 'block';
         
-        document.getElementById('showInfoBtn').addEventListener('click', () => {
-            console.log('Show info button clicked');
-            vscode.postMessage({
-                command: 'showInfo'
-            });
-        });
+        const statusIcon = result.success ? '✅' : '❌';
+        const statusText = result.success ? 'PASSED' : 'FAILED';
+        const statusClass = result.success ? 'result-success' : 'result-failure';
+        
+        testResults.innerHTML = `
+            <div class="test-result-summary ${statusClass}">
+                <div class="result-header">
+                    <span class="result-icon">${statusIcon}</span>
+                    <span class="result-status">${statusText}</span>
+                    <span class="result-duration">${result.duration}ms</span>
+                </div>
+                <div class="result-stats">
+                    <span class="stat-item">Total: ${result.totalTests}</span>
+                    <span class="stat-item passed">Passed: ${result.passed}</span>
+                    <span class="stat-item failed">Failed: ${result.failed}</span>
+                    <span class="stat-item skipped">Skipped: ${result.skipped}</span>
+                </div>
+            </div>
+        `;
     }
+
+    function showTestCases(testCases) {
+        testCasesSection.style.display = 'block';
+        
+        const groupedTests = groupTestsByClass(testCases);
+        
+        let html = '';
+        for (const [className, tests] of Object.entries(groupedTests)) {
+            const classTests = tests.filter(t => t.type === 'method');
+            
+            html += `
+                <div class="test-class">
+                    <div class="test-class-header">
+                        <div class="test-class-info">
+                            <span class="test-class-name">${getShortClassName(className)}</span>
+                            <span class="test-class-package">${className}</span>
+                        </div>
+                        <div class="test-class-actions">
+                            <button class="test-run-btn" onclick="runTestClass('${className}')">
+                                ▶️ Run Class
+                            </button>
+                        </div>
+                    </div>
+                    <div class="test-methods">
+            `;
+            
+            classTests.forEach(testCase => {
+                html += `
+                    <div class="test-method">
+                        <div class="test-method-info">
+                            <span class="test-method-name">${testCase.name}</span>
+                            <span class="test-method-location">${getFileName(testCase.filePath)}:${testCase.line}</span>
+                        </div>
+                        <button class="test-run-btn" onclick="runSingleTest('${encodeTestCase(testCase)}')">
+                            ▶️ Run
+                        </button>
+                    </div>
+                `;
+            });
+            
+            html += `
+                    </div>
+                </div>
+            `;
+        }
+        
+        testCasesList.innerHTML = html;
+    }
+
+    function groupTestsByClass(testCases) {
+        const grouped = {};
+        testCases.forEach(testCase => {
+            if (!grouped[testCase.className]) {
+                grouped[testCase.className] = [];
+            }
+            grouped[testCase.className].push(testCase);
+        });
+        return grouped;
+    }
+
+    function getShortClassName(fullClassName) {
+        const parts = fullClassName.split('.');
+        return parts[parts.length - 1];
+    }
+
+    function getFileName(filePath) {
+        return filePath.split(/[/\\]/).pop();
+    }
+
+    function encodeTestCase(testCase) {
+        return btoa(JSON.stringify(testCase));
+    }
+
+    function decodeTestCase(encoded) {
+        return JSON.parse(atob(encoded));
+    }
+
+    // Global functions for test button clicks
+    window.runSingleTest = function(encodedTestCase) {
+        const testCase = decodeTestCase(encodedTestCase);
+        vscode.postMessage({
+            command: 'runTest',
+            testCase: testCase
+        });
+    };
+
+    window.runTestClass = function(className) {
+        vscode.postMessage({
+            command: 'runTestClass',
+            className: className
+        });
+    };
 })();
