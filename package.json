@@ -35,7 +35,11 @@
       {
         "command": "cloud-ide-extension.openRightPanel",
         "title": "Open Cloud IDE Panel"
-    }
+      },
+      {
+        "command": "cloud-ide-extension.testHello",
+        "title": "Test Hello"
+      }
     ],
     "viewsContainers": {
       "activitybar": [
@@ -53,6 +57,13 @@
           "icon": "resources/cloud.svg",
           "id": "cloudIdeWebview",
           "name": "Cloud IDE Resources"
+        },
+        {
+          "type": "webview",
+          "id": "cloudIdeTestView",
+          "name": "Test Runner",
+          "icon": "$(beaker)",
+          "when": "workspaceFolderCount > 0"
         }
       ]
     },
