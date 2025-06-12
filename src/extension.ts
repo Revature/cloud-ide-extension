@@ -7,6 +7,8 @@ import { registerDevServerCommands } from './devserver';
 import { registerAssistantCommands } from './assistant';
 import { registerInfoCommands } from './info';
 import { handleStartupFile } from './startup';
+import { TestWebviewProvider } from './testing/testWebviewProvider';
+import { registerTestCommands } from './testing/testCommands';
 
 export async function activate(context: vscode.ExtensionContext) {
     // Create and register webview panel provider
@@ -17,11 +19,19 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.window.registerWebviewViewProvider('cloudIdeWebview', provider)
     );
 
+    // Register test functionality
+    const testProvider = new TestWebviewProvider(context.extensionUri);
+    context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider('cloudIdeTestView', testProvider)
+    );
+
     // Register all commands from different modules
     registerSessionCommands(context, provider);
     registerDevServerCommands(context);
     registerAssistantCommands(context);
     registerInfoCommands(context);
+    // Register test commands
+    registerTestCommands(context);
 
     getConfig();
 
