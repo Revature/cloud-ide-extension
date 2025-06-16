@@ -197,6 +197,7 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
         }
     }
 
+    // Updated methods in src/extension.ts for real-time test status
     private async runAllTests() {
         if (!this.currentProjectInfo || !this.currentProjectInfo.hasTests) {
             vscode.window.showWarningMessage('No tests found to run');
@@ -206,8 +207,18 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (!workspaceFolders) return;
     
-        // Notify that tests are starting
+        // Notify that tests are starting - but keep test cases visible
         this.updateTestWebview({ isRunning: true });
+    
+        // Mark ALL tests as running in the UI
+        if (this._view && this.currentProjectInfo) {
+            this.currentProjectInfo.testCases.forEach(testCase => {
+                this._view!.webview.postMessage({
+                    command: 'testStarted',
+                    testName: testCase.name
+                });
+            });
+        }
     
         try {
             const detector = this.testDetectorService.getDetectorForProject(this.currentProjectInfo.projectType);
@@ -216,20 +227,11 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
             }
     
             const command = detector.getRunAllCommand();
-            
-            // Notify that all tests are starting
-            if (this._view) {
-                this._view.webview.postMessage({
-                    command: 'testStarted',
-                    className: 'all'
-                });
-            }
-            
             const result = await this.testRunner.runTests(command, workspaceFolders[0].uri.fsPath);
             
             // Send completion updates for individual tests
             if (result.testResultsMap && this._view) {
-                result.testResultsMap.forEach((status, testName) => {
+                Object.entries(result.testResultsMap).forEach(([testName, status]) => {
                     this._view!.webview.postMessage({
                         command: 'testCompleted',
                         testName: testName,
@@ -238,6 +240,7 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
                 });
             }
             
+            // Update with final results
             this.updateTestWebview({ 
                 isRunning: false,
                 lastResult: result
@@ -290,6 +293,7 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
                 });
             }
             
+            // Update the webview with new results but keep it functional
             this.updateTestWebview({ 
                 lastResult: result
             });
@@ -319,11 +323,14 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (!workspaceFolders) return;
     
-        // Notify that class tests are starting
-        if (this._view) {
-            this._view.webview.postMessage({
-                command: 'testStarted',
-                className: className
+        // Mark all tests in the class as running
+        if (this._view && this.currentProjectInfo) {
+            const classTests = this.currentProjectInfo.testCases.filter(t => t.className === className);
+            classTests.forEach(testCase => {
+                this._view!.webview.postMessage({
+                    command: 'testStarted',
+                    testName: testCase.name
+                });
             });
         }
     
@@ -337,12 +344,11 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
             const result = await this.testRunner.runTests(command, workspaceFolders[0].uri.fsPath);
             
             // Send completion updates for tests in the class
-            if (result.testResultsMap && this._view) {
-                // Find tests that belong to this class
+            if (this._view && this.currentProjectInfo) {
                 const classTests = this.currentProjectInfo.testCases.filter(t => t.className === className);
                 classTests.forEach(testCase => {
-                    const status = result.testResultsMap.get(testCase.name) || 
-                                  result.testResultsMap.get(`${className}#${testCase.name}`) || 
+                    const status = result.testResultsMap[testCase.name] || 
+                                  result.testResultsMap[`${className}#${testCase.name}`] || 
                                   (result.success ? 'passed' : 'failed');
                     
                     this._view!.webview.postMessage({
