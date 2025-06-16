@@ -21,8 +21,8 @@ export interface TestRunResult {
     duration: number;
     output: string;
     results: TestResult[];
-    // New field to track individual test results by name/class
-    testResultsMap: Map<string, 'passed' | 'failed' | 'skipped' | 'unknown'>;
+    // Serialize as object for JSON transfer to webview
+    testResultsMap: { [key: string]: 'passed' | 'failed' | 'skipped' | 'unknown' };
 }
 
 export class TestRunner {
@@ -91,7 +91,7 @@ export class TestRunner {
                         duration: Date.now() - startTime,
                         output: error.message,
                         results: [],
-                        testResultsMap: new Map()
+                        testResultsMap: {}
                     });
                 });
             });
@@ -108,7 +108,7 @@ export class TestRunner {
                 duration,
                 output: error instanceof Error ? error.message : String(error),
                 results: [],
-                testResultsMap: new Map()
+                testResultsMap: {}
             };
         }
     }
@@ -181,6 +181,12 @@ export class TestRunner {
             }
         }
 
+        // Convert Map to object for JSON serialization
+        const testResultsMapObject: { [key: string]: 'passed' | 'failed' | 'skipped' | 'unknown' } = {};
+        testResultsMap.forEach((value, key) => {
+            testResultsMapObject[key] = value;
+        });
+
         return {
             success: failed === 0,
             totalTests,
@@ -190,7 +196,7 @@ export class TestRunner {
             duration,
             output,
             results,
-            testResultsMap
+            testResultsMap: testResultsMapObject
         };
     }
 

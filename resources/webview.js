@@ -1,4 +1,3 @@
-// Updated resources/webview.js with test status indicators
 (function() {
     const vscode = acquireVsCodeApi();
     let countdownInterval;
@@ -6,6 +5,7 @@
     let expiryNotificationTime;
     let currentTestData = {};
     let testResultsMap = new Map(); // Store test results for visual indicators
+    let runningTests = new Set(); // Track which tests are currently running
     
     // Session Management Elements
     const sessionInfo = document.getElementById('sessionInfo');
@@ -88,6 +88,26 @@
             }
             
             updateTestUI();
+        }
+
+        // Handle test start notifications
+        if (message.command === 'testStarted') {
+            if (message.testName) {
+                runningTests.add(message.testName);
+                updateTestCaseStatus(message.testName, 'running');
+            } else if (message.className) {
+                // Mark all tests in class as running
+                markClassTestsAsRunning(message.className);
+            }
+        }
+
+        // Handle test completion notifications
+        if (message.command === 'testCompleted') {
+            if (message.testName) {
+                runningTests.delete(message.testName);
+                testResultsMap.set(message.testName, message.status);
+                updateTestCaseStatus(message.testName, message.status);
+            }
         }
     });
 
@@ -183,11 +203,13 @@
             return;
         }
 
+        // For running state, we still show the test cases but with running indicators
         if (currentTestData.isRunning) {
-            testRunningSection.style.display = 'block';
             refreshTestsBtn.disabled = true;
             runAllTestsBtn.disabled = true;
-            return;
+            // Don't return here - continue to show test cases with running indicators
+        } else {
+            refreshTestsBtn.disabled = false;
         }
 
         refreshTestsBtn.disabled = false;
@@ -364,7 +386,13 @@
     }
 
     function getTestStatus(testCase) {
-        // Try multiple lookup strategies
+        // Check if test is currently running
+        const testKey = `${testCase.className}#${testCase.name}`;
+        if (runningTests.has(testCase.name) || runningTests.has(testKey)) {
+            return 'running';
+        }
+        
+        // Try multiple lookup strategies for completed tests
         const lookupKeys = [
             `${testCase.className}#${testCase.name}`,
             testCase.name,
@@ -397,6 +425,7 @@
             case 'failed': return '❌';
             case 'skipped': return '⏭️';
             case 'partial': return '🔶';
+            case 'running': return '<span class="spinning">🔄</span>';
             default: return '⚫'; // Unknown/not run
         }
     }
@@ -432,6 +461,11 @@
     // Global functions for test button clicks
     window.runSingleTest = function(encodedTestCase) {
         const testCase = decodeTestCase(encodedTestCase);
+        
+        // Mark test as running
+        runningTests.add(testCase.name);
+        updateTestCaseStatus(testCase.name, 'running');
+        
         vscode.postMessage({
             command: 'runTest',
             testCase: testCase
@@ -439,9 +473,41 @@
     };
 
     window.runTestClass = function(className) {
+        // Mark all tests in class as running
+        markClassTestsAsRunning(className);
+        
         vscode.postMessage({
             command: 'runTestClass',
             className: className
         });
     };
+
+    // Helper functions for real-time status updates
+    function updateTestCaseStatus(testName, status) {
+        // Find and update the specific test case in the UI
+        const testElements = document.querySelectorAll('.test-method');
+        testElements.forEach(element => {
+            const methodNameElement = element.querySelector('.test-method-name');
+            if (methodNameElement && methodNameElement.textContent === testName) {
+                const statusElement = element.querySelector('.test-method-status');
+                if (statusElement) {
+                    statusElement.innerHTML = getStatusIcon(status);
+                }
+            }
+        });
+    }
+
+    function markClassTestsAsRunning(className) {
+        if (!currentTestData.projectInfo || !currentTestData.projectInfo.testCases) {
+            return;
+        }
+        
+        // Find all tests in the class and mark them as running
+        currentTestData.projectInfo.testCases.forEach(testCase => {
+            if (testCase.className === className) {
+                runningTests.add(testCase.name);
+                updateTestCaseStatus(testCase.name, 'running');
+            }
+        });
+    }
 })();

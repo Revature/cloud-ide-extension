@@ -202,26 +202,47 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
             vscode.window.showWarningMessage('No tests found to run');
             return;
         }
-
+    
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (!workspaceFolders) return;
-
+    
+        // Notify that tests are starting
         this.updateTestWebview({ isRunning: true });
-
+    
         try {
             const detector = this.testDetectorService.getDetectorForProject(this.currentProjectInfo.projectType);
             if (!detector) {
                 throw new Error(`No test runner available for ${this.currentProjectInfo.projectType} projects`);
             }
-
+    
             const command = detector.getRunAllCommand();
+            
+            // Notify that all tests are starting
+            if (this._view) {
+                this._view.webview.postMessage({
+                    command: 'testStarted',
+                    className: 'all'
+                });
+            }
+            
             const result = await this.testRunner.runTests(command, workspaceFolders[0].uri.fsPath);
+            
+            // Send completion updates for individual tests
+            if (result.testResultsMap && this._view) {
+                result.testResultsMap.forEach((status, testName) => {
+                    this._view!.webview.postMessage({
+                        command: 'testCompleted',
+                        testName: testName,
+                        status: status
+                    });
+                });
+            }
             
             this.updateTestWebview({ 
                 isRunning: false,
                 lastResult: result
             });
-
+    
             if (result.success) {
                 vscode.window.showInformationMessage(
                     `✅ All tests passed! (${result.passed}/${result.totalTests})`
@@ -236,69 +257,124 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
             vscode.window.showErrorMessage(`Failed to run tests: ${error}`);
         }
     }
-
+    
     private async runSingleTest(testCase: any) {
         if (!this.currentProjectInfo) return;
-
+    
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (!workspaceFolders) return;
-
-        this.updateTestWebview({ isRunning: true });
-
+    
+        // Notify that specific test is starting
+        if (this._view) {
+            this._view.webview.postMessage({
+                command: 'testStarted',
+                testName: testCase.name
+            });
+        }
+    
         try {
             const detector = this.testDetectorService.getDetectorForProject(this.currentProjectInfo.projectType);
             if (!detector) {
                 throw new Error(`No test runner available for ${this.currentProjectInfo.projectType} projects`);
             }
-
+    
             const command = detector.getRunSingleTestCommand(testCase);
             const result = await this.testRunner.runTests(command, workspaceFolders[0].uri.fsPath);
             
+            // Send completion update for the specific test
+            if (this._view) {
+                this._view.webview.postMessage({
+                    command: 'testCompleted',
+                    testName: testCase.name,
+                    status: result.success ? 'passed' : 'failed'
+                });
+            }
+            
             this.updateTestWebview({ 
-                isRunning: false,
                 lastResult: result
             });
-
+    
             if (result.success) {
                 vscode.window.showInformationMessage(`✅ Test ${testCase.name} passed!`);
             } else {
                 vscode.window.showErrorMessage(`❌ Test ${testCase.name} failed!`);
             }
         } catch (error) {
-            this.updateTestWebview({ isRunning: false });
+            // Send failure notification
+            if (this._view) {
+                this._view.webview.postMessage({
+                    command: 'testCompleted',
+                    testName: testCase.name,
+                    status: 'failed'
+                });
+            }
+            
             vscode.window.showErrorMessage(`Failed to run test: ${error}`);
         }
     }
-
+    
     private async runTestClass(className: string) {
         if (!this.currentProjectInfo) return;
-
+    
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (!workspaceFolders) return;
-
-        this.updateTestWebview({ isRunning: true });
-
+    
+        // Notify that class tests are starting
+        if (this._view) {
+            this._view.webview.postMessage({
+                command: 'testStarted',
+                className: className
+            });
+        }
+    
         try {
             const detector = this.testDetectorService.getDetectorForProject(this.currentProjectInfo.projectType);
             if (!detector) {
                 throw new Error(`No test runner available for ${this.currentProjectInfo.projectType} projects`);
             }
-
+    
             const command = detector.getRunClassCommand(className);
             const result = await this.testRunner.runTests(command, workspaceFolders[0].uri.fsPath);
             
+            // Send completion updates for tests in the class
+            if (result.testResultsMap && this._view) {
+                // Find tests that belong to this class
+                const classTests = this.currentProjectInfo.testCases.filter(t => t.className === className);
+                classTests.forEach(testCase => {
+                    const status = result.testResultsMap.get(testCase.name) || 
+                                  result.testResultsMap.get(`${className}#${testCase.name}`) || 
+                                  (result.success ? 'passed' : 'failed');
+                    
+                    this._view!.webview.postMessage({
+                        command: 'testCompleted',
+                        testName: testCase.name,
+                        status: status
+                    });
+                });
+            }
+            
             this.updateTestWebview({ 
-                isRunning: false,
                 lastResult: result
             });
-
+    
             if (result.success) {
                 vscode.window.showInformationMessage(`✅ Test class ${className} passed!`);
             } else {
                 vscode.window.showErrorMessage(`❌ Test class ${className} failed!`);
             }
         } catch (error) {
-            this.updateTestWebview({ isRunning: false });
+            // Send failure notifications for all tests in the class
+            if (this._view && this.currentProjectInfo) {
+                const classTests = this.currentProjectInfo.testCases.filter(t => t.className === className);
+                classTests.forEach(testCase => {
+                    this._view!.webview.postMessage({
+                        command: 'testCompleted',
+                        testName: testCase.name,
+                        status: 'failed'
+                    });
+                });
+            }
+            
             vscode.window.showErrorMessage(`Failed to run test class: ${error}`);
         }
     }

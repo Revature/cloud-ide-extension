@@ -825,3 +825,222 @@ body {
 .test-class.class-partial .test-class-header {
     border-left: 3px solid #FF9800;
 }
+
+.test-method-status, .test-class-status {
+    margin-right: 6px;
+    font-size: 12px;
+    display: inline-block;
+    min-width: 16px;
+}
+
+/* Spinning animation for running tests */
+.spinning {
+    display: inline-block;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.test-method-info, .test-class-info {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+}
+
+.test-method-name {
+    font-weight: 500;
+    color: var(--vscode-foreground);
+    margin-left: 4px;
+}
+
+.test-class-name {
+    font-weight: bold;
+    color: var(--vscode-textLink-foreground);
+    margin-left: 4px;
+}
+
+/* Enhanced total tests display */
+#testTotalTests {
+    font-family: var(--vscode-editor-font-family);
+    font-size: 10px;
+}
+
+/* Test result summary enhancements */
+.test-result-summary {
+    border-radius: 4px;
+    padding: 8px;
+    margin-bottom: 8px;
+}
+
+.result-success {
+    background-color: rgba(0, 128, 0, 0.1);
+    border: 1px solid rgba(0, 128, 0, 0.3);
+    color: var(--vscode-foreground);
+}
+
+.result-failure {
+    background-color: rgba(255, 0, 0, 0.1);
+    border: 1px solid rgba(255, 0, 0, 0.3);
+    color: var(--vscode-foreground);
+}
+
+.result-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+.result-icon {
+    font-size: 14px;
+}
+
+.result-status {
+    font-weight: bold;
+}
+
+.result-duration {
+    margin-left: auto;
+    font-weight: normal;
+    color: var(--vscode-descriptionForeground);
+    font-size: 9px;
+}
+
+.result-stats {
+    display: flex;
+    gap: 12px;
+    font-size: 9px;
+    flex-wrap: wrap;
+}
+
+.stat-item {
+    padding: 2px 6px;
+    border-radius: 2px;
+    background-color: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+    white-space: nowrap;
+}
+
+.stat-item.passed {
+    background-color: rgba(0, 128, 0, 0.2);
+    color: #4CAF50;
+}
+
+.stat-item.failed {
+    background-color: rgba(255, 0, 0, 0.2);
+    color: #F44336;
+}
+
+.stat-item.skipped {
+    background-color: rgba(255, 193, 7, 0.2);
+    color: #FF9800;
+}
+
+/* Test class and method styling improvements */
+.test-class {
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 4px;
+    margin-bottom: 8px;
+    overflow: hidden;
+}
+
+.test-class-header {
+    background-color: var(--vscode-editor-background);
+    padding: 8px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.test-class-package {
+    font-size: 9px;
+    color: var(--vscode-descriptionForeground);
+    font-family: var(--vscode-editor-font-family);
+    word-break: break-all;
+    margin-left: 4px;
+}
+
+.test-class-actions {
+    margin-left: 8px;
+}
+
+.test-methods {
+    background-color: var(--vscode-textCodeBlock-background);
+}
+
+.test-method {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+    font-size: 10px;
+}
+
+.test-method:last-child {
+    border-bottom: none;
+}
+
+.test-method:hover {
+    background-color: var(--vscode-list-hoverBackground);
+}
+
+.test-method-location {
+    font-size: 9px;
+    color: var(--vscode-descriptionForeground);
+    font-family: var(--vscode-editor-font-family);
+    margin-left: 8px;
+}
+
+.test-run-btn {
+    background-color: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    border: 1px solid var(--vscode-button-border);
+    border-radius: 2px;
+    padding: 2px 6px;
+    font-size: 9px;
+    cursor: pointer;
+    white-space: nowrap;
+    margin-left: 8px;
+}
+
+.test-run-btn:hover {
+    background-color: var(--vscode-button-secondaryHoverBackground);
+}
+
+.test-run-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Additional status-specific styling */
+.test-method.test-passed {
+    border-left: 3px solid #4CAF50;
+}
+
+.test-method.test-failed {
+    border-left: 3px solid #F44336;
+}
+
+.test-method.test-skipped {
+    border-left: 3px solid #FF9800;
+}
+
+.test-class.class-passed .test-class-header {
+    border-left: 3px solid #4CAF50;
+}
+
+.test-class.class-failed .test-class-header {
+    border-left: 3px solid #F44336;
+}
+
+.test-class.class-partial .test-class-header {
+    border-left: 3px solid #FF9800;
+}
