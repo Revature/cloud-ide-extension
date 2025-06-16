@@ -15,13 +15,14 @@ class RightSidePanelWebview {
     private _apiResponse: string = '';
     private _isLoading: boolean = false;
     private _hasAnalyzed: boolean = false;
+    private _currentAction: string = '';
     private _openaiService: OpenAIService;
 
     public static createOrShow(extensionUri: vscode.Uri) {
         // If we already have a panel, show it.
         if (RightSidePanelWebview.currentPanel) {
             RightSidePanelWebview.currentPanel._panel.reveal(vscode.ViewColumn.Beside);
-            return;
+            return RightSidePanelWebview.currentPanel;
         }
 
         // Otherwise, create a new panel in the right side.
@@ -37,6 +38,7 @@ class RightSidePanelWebview {
         );
 
         RightSidePanelWebview.currentPanel = new RightSidePanelWebview(panel, extensionUri);
+        return RightSidePanelWebview.currentPanel;
     }
 
     public static revive(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
@@ -50,7 +52,7 @@ class RightSidePanelWebview {
         // Initialize OpenAI service with hardcoded API key
         const apiKey = 'YOUR_API_KEY_HERE'; // Replace with your actual API key
         this._openaiService = new OpenAIService(apiKey);
-        this._openaiService.loadSystemPrompt(extensionUri.fsPath);
+        this._openaiService.loadSystemPrompts(extensionUri.fsPath);
 
         // Set the webview's initial html content
         this._update();
@@ -84,14 +86,14 @@ class RightSidePanelWebview {
         this._panel.webview.onDidReceiveMessage(
             message => {
                 switch (message.command) {
-                    case 'analyzeWithAI':
-                        this.analyzeWithOpenAI();
+                    case 'improveMyCode':
+                        this.improveMyCodeWithOpenAI();
                         return;
-                    case 'copyResponse':
-                        if (this._apiResponse) {
-                            vscode.env.clipboard.writeText(this._apiResponse);
-                            vscode.window.showInformationMessage('AI response copied to clipboard');
-                        }
+                    case 'checkMyCode':
+                        this.checkMyCodeWithOpenAI();
+                        return;
+                    case 'suggestTestCases':
+                        this.suggestTestCasesWithOpenAI();
                         return;
                     case 'requestInitialState':
                         this.sendStateToWebview();
@@ -140,6 +142,7 @@ class RightSidePanelWebview {
                 this._apiResponse = '';
                 this._hasAnalyzed = false;
                 this._isLoading = false;
+                this._currentAction = '';
             }
         } else if (!activeEditor) {
             // Only clear if there's truly no editor (not just switching to webview)
@@ -156,7 +159,20 @@ class RightSidePanelWebview {
         this.sendStateToWebview();
     }
 
-    private async analyzeWithOpenAI() {
+    // Public methods for executing AI commands directly
+    public async executeImproveMyCode() {
+        await this.improveMyCodeWithOpenAI();
+    }
+
+    public async executeCheckMyCode() {
+        await this.checkMyCodeWithOpenAI();
+    }
+
+    public async executeSuggestTestCases() {
+        await this.suggestTestCasesWithOpenAI();
+    }
+
+    private async improveMyCodeWithOpenAI() {
         if (!this._currentEditorContent.trim()) {
             vscode.window.showWarningMessage('No code content to analyze');
             return;
@@ -164,10 +180,64 @@ class RightSidePanelWebview {
 
         // Set loading state
         this._isLoading = true;
+        this._currentAction = 'improve';
+        this._hasAnalyzed = false;
         this.sendStateToWebview();
 
         try {
-            this._apiResponse = await this._openaiService.analyzeCode(this._currentEditorContent);
+            this._apiResponse = await this._openaiService.improveMyCode(this._currentEditorContent);
+            this._hasAnalyzed = true;
+        } catch (error) {
+            console.error('OpenAI API Error:', error);
+            this._apiResponse = `Error: ${error instanceof Error ? error.message : 'Unknown error occurred'}`;
+            this._hasAnalyzed = true;
+            vscode.window.showErrorMessage(`AI Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        } finally {
+            this._isLoading = false;
+            this.sendStateToWebview();
+        }
+    }
+
+    private async suggestTestCasesWithOpenAI() {
+        if (!this._currentEditorContent.trim()) {
+            vscode.window.showWarningMessage('No code content to analyze');
+            return;
+        }
+
+        // Set loading state
+        this._isLoading = true;
+        this._currentAction = 'test';
+        this._hasAnalyzed = false;
+        this.sendStateToWebview();
+
+        try {
+            this._apiResponse = await this._openaiService.suggestTestCases(this._currentEditorContent);
+            this._hasAnalyzed = true;
+        } catch (error) {
+            console.error('OpenAI API Error:', error);
+            this._apiResponse = `Error: ${error instanceof Error ? error.message : 'Unknown error occurred'}`;
+            this._hasAnalyzed = true;
+            vscode.window.showErrorMessage(`AI Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        } finally {
+            this._isLoading = false;
+            this.sendStateToWebview();
+        }
+    }
+
+    private async checkMyCodeWithOpenAI() {
+        if (!this._currentEditorContent.trim()) {
+            vscode.window.showWarningMessage('No code content to analyze');
+            return;
+        }
+
+        // Set loading state
+        this._isLoading = true;
+        this._currentAction = 'check';
+        this._hasAnalyzed = false;
+        this.sendStateToWebview();
+
+        try {
+            this._apiResponse = await this._openaiService.checkMyCode(this._currentEditorContent);
             this._hasAnalyzed = true;
         } catch (error) {
             console.error('OpenAI API Error:', error);
@@ -189,7 +259,8 @@ class RightSidePanelWebview {
                 hasContent,
                 apiResponse: this._apiResponse,
                 isLoading: this._isLoading,
-                hasAnalyzed: this._hasAnalyzed
+                hasAnalyzed: this._hasAnalyzed,
+                currentAction: this._currentAction
             }
         });
     }
@@ -251,10 +322,62 @@ class RightSidePanelWebview {
 }
 
 export function registerAssistantCommands(context: vscode.ExtensionContext) {
-    // Register the new command to open webview in right side panel
+    // Register the command to open webview in right side panel
     context.subscriptions.push(
-        vscode.commands.registerCommand('cloud-ide-extension.openRightPanel', () => {
+        vscode.commands.registerCommand('cloud-ide-extension.openAssistantPanel', () => {
             RightSidePanelWebview.createOrShow(context.extensionUri);
+        })
+    );
+
+    // Register individual AI commands that open webview and execute the action
+    context.subscriptions.push(
+        vscode.commands.registerCommand('cloud-ide-extension.checkMyCode', async () => {
+            // Always create or show the webview panel first
+            const panel = RightSidePanelWebview.createOrShow(context.extensionUri);
+            
+            // Check if there's content to analyze
+            const activeEditor = vscode.window.activeTextEditor;
+            if (!activeEditor || !activeEditor.document.getText().trim()) {
+                // The webview will show the "no active editor" state automatically
+                return;
+            }
+
+            // Execute the check code action
+            await panel.executeCheckMyCode();
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('cloud-ide-extension.improveMyCode', async () => {
+            // Always create or show the webview panel first
+            const panel = RightSidePanelWebview.createOrShow(context.extensionUri);
+            
+            // Check if there's content to analyze
+            const activeEditor = vscode.window.activeTextEditor;
+            if (!activeEditor || !activeEditor.document.getText().trim()) {
+                // The webview will show the "no active editor" state automatically
+                return;
+            }
+
+            // Execute the improve code action
+            await panel.executeImproveMyCode();
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('cloud-ide-extension.suggestTestCases', async () => {
+            // Always create or show the webview panel first
+            const panel = RightSidePanelWebview.createOrShow(context.extensionUri);
+            
+            // Check if there's content to analyze
+            const activeEditor = vscode.window.activeTextEditor;
+            if (!activeEditor || !activeEditor.document.getText().trim()) {
+                // The webview will show the "no active editor" state automatically
+                return;
+            }
+
+            // Execute the suggest test cases action
+            await panel.executeSuggestTestCases();
         })
     );
 }

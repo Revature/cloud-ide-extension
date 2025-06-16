@@ -13,7 +13,7 @@
             <div class="welcome-icon">🤖</div>
             <div class="welcome-title">AI Code Assistant</div>
             <div class="welcome-subtitle">
-                Click "Analyze Code" below to get AI insights on your open file
+                Select an AI action below to analyze your open file
             </div>
         </div>
 
@@ -26,16 +26,35 @@
             </div>
         </div>
 
-        <!-- Analyze Button -->
-        <div class="analyze-section" id="analyzeSection">
-            <button class="analyze-button" onclick="analyzeWithAI()" id="analyzeButton">
-                <span class="button-text" id="analyzeButtonText">🤖 Analyze Code</span>
-                <span class="loading-spinner" id="loadingSpinner">⟳ Analyzing...</span>
-            </button>
+        <!-- AI Action Buttons Section -->
+        <div class="section" id="actionsSection">
+            <div class="section-title">AI Actions</div>
+            
+            <!-- Single loading indicator -->
+            <div class="analyze-section" id="loadingSection" style="display: none;">
+                <div class="loading-spinner" id="loadingSpinner">⟳ Processing...</div>
+            </div>
+
+            <div class="action-buttons">
+                <button class="button" onclick="checkMyCode()" id="checkButton">
+                    🔍 Check my Code
+                </button>
+                
+                <button class="button" onclick="improveMyCode()" id="improveButton">
+                    ✨ Improve my Code
+                </button>
+                
+                <button class="button" onclick="suggestTestCases()" id="testButton">
+                    🧪 Suggest test Cases
+                </button>
+            </div>
         </div>
 
-        <!-- AI Response -->
-        <div class="response-section" id="responseSection">
+        <!-- AI Response Section -->
+        <div class="section response-section" id="responseSection">
+            <div class="response-header">
+                <h3 id="responseTitle" class="section-title">AI Response</h3>
+            </div>
             <div class="response-content" id="responseContent"></div>
         </div>
     </div>

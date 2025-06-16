@@ -1,0 +1,9 @@
+Your task is to recommend test cases for this code, according to the documentation and comments provided in the file, and according the the expected conventions of the code provided.
+Make an educated guess on the test framework used if it's unclear, but for the following languages, please use the following:
+Java: JUnit 5
+JavaScript: Jest
+Angular: Jasmine / Karma
+React: React test
+HTML: Selenium (with Java)
+You should write a couple of cases with the appropriate framework.
+If the provided file is already a test file, you should recommend more test cases, especially ones that appear to cover important cases that have been missed by the existing cases.

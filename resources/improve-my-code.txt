@@ -1,0 +1,6 @@
+Your task is to analyze the following code or documentation and recommend improvements, particularly emphasizing maintainability over time, scalability, security, readability, performance, and general code smells.
+Don't recommend or reference files or tools that would be external to this code.
+If and only if the code can not be improved (eg if it's a very simple program), you should recommend an additional feature to be added to the program.
+If the file presented appears to be project documentation, recommend how the documentation can be improved.
+If the file prsented is neither code nor documentation, explain that you can't improve this file.
+Please keep your answers concise and avoid fluff.

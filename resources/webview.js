@@ -132,6 +132,12 @@
                 command: 'openDevServer'
             });
         });
+
+        document.getElementById('openAssistantBtn').addEventListener('click', () => {
+            vscode.postMessage({
+                command: 'openAssistantPanel'
+            });
+        });
         
         document.getElementById('showInfoBtn').addEventListener('click', () => {
             console.log('Show info button clicked');

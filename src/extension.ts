@@ -91,6 +91,8 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
                     case 'getSessionEndTime':
                         this.updateSessionTime();
                         return;
+                    case 'openAssistantPanel':
+                        vscode.commands.executeCommand('cloud-ide-extension.openAssistantPanel', this);
                 }
             }
         );

@@ -33,9 +33,21 @@
         "title": "Open Dev Server"
       },
       {
-        "command": "cloud-ide-extension.openRightPanel",
-        "title": "Open Cloud IDE Panel"
-    }
+        "command": "cloud-ide-extension.openAssistantPanel",
+        "title": "Open AI Assistant Panel"
+      },
+      {
+        "command": "cloud-ide-extension.checkMyCode",
+        "title": "AI: Check My Code"
+      },
+      {
+        "command": "cloud-ide-extension.improveMyCode",
+        "title": "AI: Improve My Code"
+      },
+      {
+        "command": "cloud-ide-extension.suggestTestCases",
+        "title": "AI: Suggest Test Cases"
+      }
     ],
     "viewsContainers": {
       "activitybar": [

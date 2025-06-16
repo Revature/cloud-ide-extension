@@ -1,0 +1,4 @@
+Your task is to determine if this code works or not, according to the documentation and comments provided in the file, and according the the expected conventions of the code provided.
+Do not explain how to fix the code exactly.
+You can produce what you believe to be expected and actual output of the code.
+Keep your answer under 100 words.
