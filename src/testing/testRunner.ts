@@ -1,11 +1,12 @@
 // src/testing/testRunner.ts
+
 import * as vscode from 'vscode';
 import { spawn } from 'child_process';
 import { TestCase } from './testDetector';
 
 export interface TestResult {
     testCase: TestCase;
-    status: 'passed' | 'failed' | 'skipped' | 'error';
+    status: 'passed' | 'failed' | 'skipped' | 'error' | 'unknown';
     duration: number;
     output: string;
     error?: string;
@@ -20,6 +21,8 @@ export interface TestRunResult {
     duration: number;
     output: string;
     results: TestResult[];
+    // New field to track individual test results by name/class
+    testResultsMap: Map<string, 'passed' | 'failed' | 'skipped' | 'unknown'>;
 }
 
 export class TestRunner {
@@ -87,7 +90,8 @@ export class TestRunner {
                         skipped: 0,
                         duration: Date.now() - startTime,
                         output: error.message,
-                        results: []
+                        results: [],
+                        testResultsMap: new Map()
                     });
                 });
             });
@@ -103,21 +107,23 @@ export class TestRunner {
                 skipped: 0,
                 duration,
                 output: error instanceof Error ? error.message : String(error),
-                results: []
+                results: [],
+                testResultsMap: new Map()
             };
         }
     }
 
     private parseTestOutput(output: string, duration: number): TestRunResult {
-        // Parse Maven test output
         const lines = output.split('\n');
         
         let totalTests = 0;
         let passed = 0;
         let failed = 0;
         let skipped = 0;
-        
-        // Look for Maven test summary
+        const testResultsMap = new Map<string, 'passed' | 'failed' | 'skipped' | 'unknown'>();
+        const results: TestResult[] = [];
+
+        // Parse Maven test output for summary
         for (const line of lines) {
             if (line.includes('Tests run:')) {
                 const match = line.match(/Tests run: (\d+), Failures: (\d+), Errors: (\d+), Skipped: (\d+)/);
@@ -133,6 +139,48 @@ export class TestRunner {
             }
         }
 
+        // Parse individual test results from Maven output
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            
+            // Look for test method results in Maven output format
+            // Example: "test(com.example.MyTestClass)  Time elapsed: 0.001 s  <<< FAILURE!"
+            // or "testMethod(com.example.MyTestClass)  Time elapsed: 0.001 s"
+            const testResultMatch = line.match(/(\w+)\(([^)]+)\)\s+Time elapsed: ([\d.]+) s(?:\s+<<<\s+(\w+))?/);
+            if (testResultMatch) {
+                const methodName = testResultMatch[1];
+                const className = testResultMatch[2];
+                const testDuration = parseFloat(testResultMatch[3]) * 1000; // Convert to ms
+                const status = testResultMatch[4];
+                
+                let testStatus: 'passed' | 'failed' | 'skipped' | 'unknown' = 'passed';
+                if (status === 'FAILURE' || status === 'ERROR') {
+                    testStatus = 'failed';
+                } else if (status === 'SKIPPED') {
+                    testStatus = 'skipped';
+                }
+                
+                const testKey = `${className}#${methodName}`;
+                testResultsMap.set(testKey, testStatus);
+                testResultsMap.set(methodName, testStatus); // Also store by method name for easier lookup
+                
+                // Try to create a TestResult object
+                results.push({
+                    testCase: {
+                        name: methodName,
+                        className: className,
+                        filePath: '', // Not available from Maven output
+                        line: 0,
+                        type: 'method'
+                    },
+                    status: testStatus,
+                    duration: testDuration,
+                    output: line,
+                    error: status === 'FAILURE' || status === 'ERROR' ? 'Test failed' : undefined
+                });
+            }
+        }
+
         return {
             success: failed === 0,
             totalTests,
@@ -141,7 +189,8 @@ export class TestRunner {
             skipped,
             duration,
             output,
-            results: [] // Individual test results could be parsed here if needed
+            results,
+            testResultsMap
         };
     }
 

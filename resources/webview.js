@@ -1,9 +1,11 @@
+// Updated resources/webview.js with test status indicators
 (function() {
     const vscode = acquireVsCodeApi();
     let countdownInterval;
     let sessionEndTime;
     let expiryNotificationTime;
     let currentTestData = {};
+    let testResultsMap = new Map(); // Store test results for visual indicators
     
     // Session Management Elements
     const sessionInfo = document.getElementById('sessionInfo');
@@ -73,6 +75,18 @@
         // Handle test data updates
         if (message.command === 'updateTestData') {
             currentTestData = message.data;
+            
+            // Update test results map if available
+            if (currentTestData.lastResult && currentTestData.lastResult.testResultsMap) {
+                testResultsMap.clear();
+                // Convert the testResultsMap object to a Map
+                if (typeof currentTestData.lastResult.testResultsMap === 'object') {
+                    Object.entries(currentTestData.lastResult.testResultsMap).forEach(([key, value]) => {
+                        testResultsMap.set(key, value);
+                    });
+                }
+            }
+            
             updateTestUI();
         }
     });
@@ -209,7 +223,11 @@
         testProjectInfoSection.style.display = 'block';
         testProjectType.textContent = projectInfo.projectType.toUpperCase();
         testFramework.textContent = projectInfo.testFramework;
-        testTotalTests.textContent = projectInfo.testCases.length;
+        
+        // Enhanced total tests display with pass/fail summary
+        const totalTestsText = getTotalTestsText(projectInfo.testCases.length);
+        testTotalTests.innerHTML = totalTestsText;
+        
         runAllTestsBtn.disabled = false;
 
         if (currentTestData.lastResult) {
@@ -217,6 +235,40 @@
         }
 
         showTestCases(projectInfo.testCases);
+    }
+
+    function getTotalTestsText(totalCount) {
+        if (testResultsMap.size === 0) {
+            return totalCount.toString();
+        }
+        
+        // Count test results
+        let passed = 0;
+        let failed = 0;
+        let skipped = 0;
+        
+        testResultsMap.forEach(status => {
+            switch(status) {
+                case 'passed': passed++; break;
+                case 'failed': failed++; break;
+                case 'skipped': skipped++; break;
+            }
+        });
+        
+        const testedCount = passed + failed + skipped;
+        
+        if (testedCount === 0) {
+            return totalCount.toString();
+        }
+        
+        const passedText = passed > 0 ? `✅ ${passed} passed` : '';
+        const failedText = failed > 0 ? `❌ ${failed} failed` : '';
+        const skippedText = skipped > 0 ? `⏭️ ${skipped} skipped` : '';
+        
+        const parts = [passedText, failedText, skippedText].filter(p => p);
+        const summary = parts.join(', ');
+        
+        return `${testedCount}/${totalCount} (${summary})`;
     }
 
     function hideAllTestSections() {
@@ -263,10 +315,15 @@
         for (const [className, tests] of Object.entries(groupedTests)) {
             const classTests = tests.filter(t => t.type === 'method');
             
+            // Calculate class-level status
+            const classStatus = getClassStatus(className, classTests);
+            const classStatusIcon = getStatusIcon(classStatus);
+            
             html += `
                 <div class="test-class">
                     <div class="test-class-header">
                         <div class="test-class-info">
+                            <span class="test-class-status">${classStatusIcon}</span>
                             <span class="test-class-name">${getShortClassName(className)}</span>
                             <span class="test-class-package">${className}</span>
                         </div>
@@ -280,9 +337,13 @@
             `;
             
             classTests.forEach(testCase => {
+                const testStatus = getTestStatus(testCase);
+                const statusIcon = getStatusIcon(testStatus);
+                
                 html += `
                     <div class="test-method">
                         <div class="test-method-info">
+                            <span class="test-method-status">${statusIcon}</span>
                             <span class="test-method-name">${testCase.name}</span>
                             <span class="test-method-location">${getFileName(testCase.filePath)}:${testCase.line}</span>
                         </div>
@@ -300,6 +361,44 @@
         }
         
         testCasesList.innerHTML = html;
+    }
+
+    function getTestStatus(testCase) {
+        // Try multiple lookup strategies
+        const lookupKeys = [
+            `${testCase.className}#${testCase.name}`,
+            testCase.name,
+            `${getShortClassName(testCase.className)}#${testCase.name}`
+        ];
+        
+        for (const key of lookupKeys) {
+            if (testResultsMap.has(key)) {
+                return testResultsMap.get(key);
+            }
+        }
+        
+        return 'unknown';
+    }
+
+    function getClassStatus(className, classTests) {
+        const statuses = classTests.map(test => getTestStatus(test));
+        
+        if (statuses.some(s => s === 'failed')) return 'failed';
+        if (statuses.some(s => s === 'skipped')) return 'skipped';
+        if (statuses.every(s => s === 'passed')) return 'passed';
+        if (statuses.some(s => s === 'passed')) return 'partial';
+        
+        return 'unknown';
+    }
+
+    function getStatusIcon(status) {
+        switch(status) {
+            case 'passed': return '✅';
+            case 'failed': return '❌';
+            case 'skipped': return '⏭️';
+            case 'partial': return '🔶';
+            default: return '⚫'; // Unknown/not run
+        }
     }
 
     function groupTestsByClass(testCases) {
