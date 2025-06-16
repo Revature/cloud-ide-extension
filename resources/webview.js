@@ -165,68 +165,68 @@
         }
     }
 
-    // Enhanced Test Management Functions
     function updateTestUI() {
         hideAllTestSections();
-
+    
         if (currentTestData.isLoading) {
             testLoadingSection.style.display = 'block';
             refreshTestsBtn.disabled = true;
             runAllTestsBtn.disabled = true;
             return;
         }
-
+    
         refreshTestsBtn.disabled = false;
-
+    
         if (currentTestData.error) {
             testErrorSection.style.display = 'block';
             testErrorText.textContent = currentTestData.error;
             return;
         }
-
+    
         if (!currentTestData.hasWorkspace) {
             testNoWorkspaceSection.style.display = 'block';
             runAllTestsBtn.disabled = true;
             return;
         }
-
+    
         if (!currentTestData.projectInfo) {
             testNoTestsSection.style.display = 'block';
             testNoTestsMessage.textContent = 'Project type not supported or no test configuration found';
             runAllTestsBtn.disabled = true;
             return;
         }
-
+    
         const projectInfo = currentTestData.projectInfo;
-
-        if (!projectInfo.hasTests || projectInfo.testCases.length === 0) {
+    
+        if (!projectInfo.hasTests || projectInfo.methodCount === 0) {
             testNoTestsSection.style.display = 'block';
-            testNoTestsMessage.textContent = `No test cases found for ${projectInfo.projectType} project using ${projectInfo.testFramework}`;
+            testNoTestsMessage.textContent = `No test methods found for ${projectInfo.projectType} project using ${projectInfo.testFramework}`;
             runAllTestsBtn.disabled = true;
             return;
         }
-
+    
         testProjectInfoSection.style.display = 'block';
         testProjectType.textContent = projectInfo.projectType.toUpperCase();
         testFramework.textContent = projectInfo.testFramework;
         
-        // Enhanced total tests display with results summary
-        const totalTestsText = getTotalTestsText(projectInfo.testCases.length);
+        // Fixed: Only count test methods, not classes
+        const totalTestsText = getTotalTestsText(projectInfo.methodCount || 0);
         testTotalTests.innerHTML = totalTestsText;
         
         runAllTestsBtn.disabled = false;
-
+    
         // Show test results if available
         if (testResultsData && testResultsData.result) {
             showTestResults(testResultsData);
         }
-
+    
         showTestCases(projectInfo.testCases);
     }
-
-    function getTotalTestsText(totalCount) {
+    
+    // Fixed getTotalTestsText function
+    function getTotalTestsText(methodCount) {
         if (!testResultsData || !testResultsData.result) {
-            return totalCount.toString();
+            return methodCount.toString();
         }
         
         const result = testResultsData.result;
@@ -237,12 +237,13 @@
         if (result.skipped > 0) summary.push(`⏭️ ${result.skipped} skipped`);
         
         if (summary.length === 0) {
-            return totalCount.toString();
+            return methodCount.toString();
         }
         
         // Calculate actual tests that were executed from our project test cases
         let actualTestedCount = 0;
         if (currentTestData.projectInfo && currentTestData.projectInfo.testCases) {
+            // Only count methods that were actually tested
             currentTestData.projectInfo.testCases.forEach(testCase => {
                 if (testCase.type === 'method') {
                     const status = getTestStatus(testCase);
@@ -253,9 +254,9 @@
             });
         }
         
-        // Use the actual tested count or fall back to result totals
+        // Use the actual tested count or fall back to result totals, but compare against methodCount
         const testedCount = actualTestedCount > 0 ? actualTestedCount : (result.passed + result.failed + result.skipped);
-        return `${testedCount}/${totalCount} (${summary.join(', ')})`;
+        return `${testedCount}/${methodCount} (${summary.join(', ')})`;
     }
 
     function hideAllTestSections() {

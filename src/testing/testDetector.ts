@@ -17,6 +17,9 @@ export interface ProjectTestInfo {
     testCases: TestCase[];
     hasTests: boolean;
     configFile?: string;
+    // Add method-specific counts
+    methodCount: number;
+    classCount: number;
 }
 
 export abstract class TestDetector {
@@ -68,6 +71,7 @@ export class JavaMavenTestDetector extends TestDetector {
             
             let className = '';
             let packageName = '';
+            let isTestClass = false;
             
             // Extract package and class name
             for (let i = 0; i < lines.length; i++) {
@@ -77,26 +81,37 @@ export class JavaMavenTestDetector extends TestDetector {
                     packageName = line.replace('package ', '').replace(';', '').trim();
                 }
                 
-                if (line.includes('class ') && (line.includes('Test') || this.hasTestAnnotations(content))) {
+                if (line.includes('class ')) {
                     const classMatch = line.match(/class\s+(\w+)/);
                     if (classMatch) {
-                        className = packageName ? `${packageName}.${classMatch[1]}` : classMatch[1];
+                        const simpleClassName = classMatch[1];
+                        className = packageName ? `${packageName}.${simpleClassName}` : simpleClassName;
                         
-                        // Add the test class itself
-                        testCases.push({
-                            name: classMatch[1],
-                            className: className,
-                            filePath: filePath,
-                            line: i + 1,
-                            type: 'class'
-                        });
+                        // Check if this is a test class
+                        isTestClass = simpleClassName.includes('Test') || this.hasTestAnnotations(content);
+                        
+                        // Only add the test class if it actually contains test methods
+                        // We'll add it later if we find test methods
                     }
                 }
+            }
+            
+            // Only process if this is a test class
+            if (!isTestClass || !className) {
+                return;
+            }
+            
+            let hasTestMethods = false;
+            
+            // Look for test methods first
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                const prevLine = i > 0 ? lines[i - 1].trim() : '';
                 
-                // Look for test methods
-                if (this.isTestMethod(line, i > 0 ? lines[i - 1] : '')) {
+                if (this.isTestMethod(line, prevLine)) {
                     const methodMatch = line.match(/(?:public|private|protected)?\s*(?:static\s+)?(?:void\s+)?(\w+)\s*\(/);
-                    if (methodMatch && className) {
+                    if (methodMatch) {
+                        hasTestMethods = true;
                         testCases.push({
                             name: methodMatch[1],
                             className: className,
@@ -106,6 +121,26 @@ export class JavaMavenTestDetector extends TestDetector {
                         });
                     }
                 }
+            }
+            
+            // Only add the class entry if it has test methods
+            if (hasTestMethods) {
+                // Find the line number where the class is declared
+                let classLineNumber = 1;
+                for (let i = 0; i < lines.length; i++) {
+                    if (lines[i].includes('class ') && lines[i].includes(className.split('.').pop() || '')) {
+                        classLineNumber = i + 1;
+                        break;
+                    }
+                }
+                
+                testCases.push({
+                    name: className.split('.').pop() || className,
+                    className: className,
+                    filePath: filePath,
+                    line: classLineNumber,
+                    type: 'class'
+                });
             }
         } catch (error) {
             console.error(`Error parsing test file ${filePath}:`, error);
@@ -163,11 +198,6 @@ export class JavaMavenTestDetector extends TestDetector {
     }
 }
 
-// Future detectors can be added here:
-// export class PythonTestDetector extends TestDetector { ... }
-// export class JavaScriptTestDetector extends TestDetector { ... }
-// export class AngularTestDetector extends TestDetector { ... }
-
 export class TestDetectorService {
     private detectors: TestDetector[] = [
         new JavaMavenTestDetector(),
@@ -184,12 +214,18 @@ export class TestDetectorService {
                     projectType = 'java';
                 }
                 
+                // Calculate counts
+                const methodCount = testCases.filter(tc => tc.type === 'method').length;
+                const classCount = testCases.filter(tc => tc.type === 'class').length;
+                
                 return {
                     projectType,
                     testFramework: detector.getTestFramework(),
                     testCases,
-                    hasTests: testCases.length > 0,
-                    configFile: projectType === 'java' ? 'pom.xml' : undefined
+                    hasTests: methodCount > 0, // Only count methods as "having tests"
+                    configFile: projectType === 'java' ? 'pom.xml' : undefined,
+                    methodCount,
+                    classCount
                 };
             }
         }
@@ -198,7 +234,9 @@ export class TestDetectorService {
             projectType: 'unknown',
             testFramework: 'None',
             testCases: [],
-            hasTests: false
+            hasTests: false,
+            methodCount: 0,
+            classCount: 0
         };
     }
 

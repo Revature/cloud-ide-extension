@@ -328,6 +328,8 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
             const workspacePath = workspaceFolders[0].uri.fsPath;
             this.currentProjectInfo = await this.testDetectorService.detectProjectTests(workspacePath);
             
+            console.log(`Detected ${this.currentProjectInfo.methodCount} test methods in ${this.currentProjectInfo.classCount} test classes`);
+            
             this.updateTestWebview({
                 hasWorkspace: true,
                 projectInfo: this.currentProjectInfo,
