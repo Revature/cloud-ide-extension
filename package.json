@@ -23,6 +23,26 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "configuration": {
+      "title": "Cloud IDE Test Runner",
+      "properties": {
+        "cloudIde.testRunner.autoRefresh": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically refresh test results when files change"
+        },
+        "cloudIde.testRunner.showFullOutput": {
+          "type": "boolean", 
+          "default": false,
+          "description": "Show full test output in results"
+        },
+        "cloudIde.testRunner.timeout": {
+          "type": "number",
+          "default": 300000,
+          "description": "Test execution timeout in milliseconds"
+        }
+      }
+    },
     "commands": [
       {
         "command": "cloud-ide-extension.showInfo",

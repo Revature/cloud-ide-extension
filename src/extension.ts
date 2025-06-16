@@ -194,7 +194,7 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
             );
     
             // Refresh webview to show updated results
-            this.refreshTestResults();
+            await this.refreshTestResults();
     
             // Show summary notification
             if (result.success) {
@@ -207,7 +207,8 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
                 );
             }
         } catch (error) {
-            vscode.window.showErrorMessage(`Failed to run tests: ${error}`);
+            console.error('Test execution error:', error);
+            vscode.window.showErrorMessage(`Failed to run tests: ${error instanceof Error ? error.message : String(error)}`);
         } finally {
             runningNotification.dispose();
         }
@@ -333,8 +334,8 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
                 isLoading: false
             });
     
-            // Also load existing test results if available
-            await this.refreshTestResults();
+            // Load existing test results if available (non-blocking)
+            setTimeout(() => this.refreshTestResults(), 100);
             
         } catch (error) {
             console.error('Error detecting tests:', error);
@@ -349,9 +350,17 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
     
     private updateTestWebview(data: any) {
         if (this._view) {
+            // Merge with existing data to preserve state
+            const currentData = {
+                hasWorkspace: true,
+                projectInfo: this.currentProjectInfo,
+                isLoading: false,
+                ...data // Override with new data
+            };
+            
             this._view.webview.postMessage({
                 command: 'updateTestData',
-                data: data
+                data: currentData
             });
         }
     }
