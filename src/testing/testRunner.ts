@@ -1,3 +1,4 @@
+// Updated TestRunner to track individual test results
 // src/testing/testRunner.ts
 
 import * as vscode from 'vscode';
@@ -113,136 +114,91 @@ export class TestRunner {
         }
     }
 
-    // Improved src/testing/testRunner.ts with better parsing and error handling
     private parseTestOutput(output: string, duration: number): TestRunResult {
-      const lines = output.split('\n');
-      
-      let totalTests = 0;
-      let passed = 0;
-      let failed = 0;
-      let skipped = 0;
-      const testResultsMap = new Map<string, 'passed' | 'failed' | 'skipped' | 'unknown'>();
-      const results: TestResult[] = [];
+        const lines = output.split('\n');
+        
+        let totalTests = 0;
+        let passed = 0;
+        let failed = 0;
+        let skipped = 0;
+        const testResultsMap = new Map<string, 'passed' | 'failed' | 'skipped' | 'unknown'>();
+        const results: TestResult[] = [];
 
-      // Parse Maven test output for summary - try multiple patterns
-      for (const line of lines) {
-          // Standard Maven Surefire output
-          let match = line.match(/Tests run: (\d+), Failures: (\d+), Errors: (\d+), Skipped: (\d+)/);
-          if (match) {
-              totalTests = parseInt(match[1]);
-              const failures = parseInt(match[2]);
-              const errors = parseInt(match[3]);
-              skipped = parseInt(match[4]);
-              failed = failures + errors;
-              passed = totalTests - failed - skipped;
-              break;
-          }
-          
-          // Alternative pattern for some Maven versions
-          match = line.match(/Tests run: (\d+), Failures: (\d+), Skipped: (\d+)/);
-          if (match) {
-              totalTests = parseInt(match[1]);
-              failed = parseInt(match[2]);
-              skipped = parseInt(match[3]);
-              passed = totalTests - failed - skipped;
-              break;
-          }
-      }
+        // Parse Maven test output for summary
+        for (const line of lines) {
+            if (line.includes('Tests run:')) {
+                const match = line.match(/Tests run: (\d+), Failures: (\d+), Errors: (\d+), Skipped: (\d+)/);
+                if (match) {
+                    totalTests = parseInt(match[1]);
+                    const failures = parseInt(match[2]);
+                    const errors = parseInt(match[3]);
+                    skipped = parseInt(match[4]);
+                    failed = failures + errors;
+                    passed = totalTests - failed - skipped;
+                    break;
+                }
+            }
+        }
 
-      // Parse individual test results from Maven output
-      for (let i = 0; i < lines.length; i++) {
-          const line = lines[i].trim();
-          
-          // Multiple patterns for test results
-          const patterns = [
-              // Standard pattern: "test(com.example.MyTestClass)  Time elapsed: 0.001 s  <<< FAILURE!"
-              /(\w+)\(([^)]+)\)\s+Time elapsed: ([\d.]+) s(?:\s+<<<\s+(\w+))?/,
-              // Alternative pattern: "testMethod(MyTestClass): PASSED"
-              /(\w+)\(([^)]+)\):\s*(\w+)/,
-              // JUnit 5 pattern: "[INFO] Running com.example.MyTestClass"
-              /Running\s+([^.]+\.)?(\w+)/
-          ];
-          
-          for (const pattern of patterns) {
-              const testResultMatch = line.match(pattern);
-              if (testResultMatch) {
-                  let methodName: string;
-                  let className: string;
-                  let testDuration = 0;
-                  let status: string | undefined;
-                  
-                  if (pattern === patterns[0]) {
-                      // Standard Maven pattern
-                      methodName = testResultMatch[1];
-                      className = testResultMatch[2];
-                      testDuration = parseFloat(testResultMatch[3]) * 1000;
-                      status = testResultMatch[4];
-                  } else if (pattern === patterns[1]) {
-                      // Alternative pattern
-                      methodName = testResultMatch[1];
-                      className = testResultMatch[2];
-                      status = testResultMatch[3];
-                  } else {
-                      // Running pattern - just note the class
-                      className = testResultMatch[2] || testResultMatch[1];
-                      methodName = 'unknown';
-                  }
-                  
-                  let testStatus: 'passed' | 'failed' | 'skipped' | 'unknown' = 'passed';
-                  if (status === 'FAILURE' || status === 'ERROR' || status === 'FAILED') {
-                      testStatus = 'failed';
-                  } else if (status === 'SKIPPED') {
-                      testStatus = 'skipped';
-                  }
-                  
-                  if (methodName !== 'unknown') {
-                      const testKey = `${className}#${methodName}`;
-                      testResultsMap.set(testKey, testStatus);
-                      testResultsMap.set(methodName, testStatus);
-                      
-                      results.push({
-                          testCase: {
-                              name: methodName,
-                              className: className,
-                              filePath: '',
-                              line: 0,
-                              type: 'method'
-                          },
-                          status: testStatus,
-                          duration: testDuration,
-                          output: line,
-                          error: status === 'FAILURE' || status === 'ERROR' ? 'Test failed' : undefined
-                      });
-                  }
-                  
-                  break; // Found a match, stop trying other patterns
-              }
-          }
-      }
+        // Parse individual test results from Maven output
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            
+            // Look for test method results in Maven output format
+            // Example: "test(com.example.MyTestClass)  Time elapsed: 0.001 s  <<< FAILURE!"
+            // or "testMethod(com.example.MyTestClass)  Time elapsed: 0.001 s"
+            const testResultMatch = line.match(/(\w+)\(([^)]+)\)\s+Time elapsed: ([\d.]+) s(?:\s+<<<\s+(\w+))?/);
+            if (testResultMatch) {
+                const methodName = testResultMatch[1];
+                const className = testResultMatch[2];
+                const testDuration = parseFloat(testResultMatch[3]) * 1000; // Convert to ms
+                const status = testResultMatch[4];
+                
+                let testStatus: 'passed' | 'failed' | 'skipped' | 'unknown' = 'passed';
+                if (status === 'FAILURE' || status === 'ERROR') {
+                    testStatus = 'failed';
+                } else if (status === 'SKIPPED') {
+                    testStatus = 'skipped';
+                }
+                
+                const testKey = `${className}#${methodName}`;
+                testResultsMap.set(testKey, testStatus);
+                testResultsMap.set(methodName, testStatus); // Also store by method name for easier lookup
+                
+                // Try to create a TestResult object
+                results.push({
+                    testCase: {
+                        name: methodName,
+                        className: className,
+                        filePath: '', // Not available from Maven output
+                        line: 0,
+                        type: 'method'
+                    },
+                    status: testStatus,
+                    duration: testDuration,
+                    output: line,
+                    error: status === 'FAILURE' || status === 'ERROR' ? 'Test failed' : undefined
+                });
+            }
+        }
 
-      // If no individual test results found but we have summary, create basic results
-      if (results.length === 0 && totalTests > 0) {
-          console.log('No individual test results parsed, using summary only');
-          // This might happen with some Maven configurations
-      }
+        // Convert Map to object for JSON serialization
+        const testResultsMapObject: { [key: string]: 'passed' | 'failed' | 'skipped' | 'unknown' } = {};
+        testResultsMap.forEach((value, key) => {
+            testResultsMapObject[key] = value;
+        });
 
-      // Convert Map to object for JSON serialization
-      const testResultsMapObject: { [key: string]: 'passed' | 'failed' | 'skipped' | 'unknown' } = {};
-      testResultsMap.forEach((value, key) => {
-          testResultsMapObject[key] = value;
-      });
-
-      return {
-          success: failed === 0 && totalTests > 0,
-          totalTests,
-          passed,
-          failed,
-          skipped,
-          duration,
-          output,
-          results,
-          testResultsMap: testResultsMapObject
-      };
+        return {
+            success: failed === 0,
+            totalTests,
+            passed,
+            failed,
+            skipped,
+            duration,
+            output,
+            results,
+            testResultsMap: testResultsMapObject
+        };
     }
 
     dispose() {

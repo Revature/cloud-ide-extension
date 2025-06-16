@@ -240,8 +240,22 @@
             return totalCount.toString();
         }
         
-        const tested = result.passed + result.failed + result.skipped;
-        return `${tested}/${totalCount} (${summary.join(', ')})`;
+        // Calculate actual tests that were executed from our project test cases
+        let actualTestedCount = 0;
+        if (currentTestData.projectInfo && currentTestData.projectInfo.testCases) {
+            currentTestData.projectInfo.testCases.forEach(testCase => {
+                if (testCase.type === 'method') {
+                    const status = getTestStatus(testCase);
+                    if (status !== 'unknown') {
+                        actualTestedCount++;
+                    }
+                }
+            });
+        }
+        
+        // Use the actual tested count or fall back to result totals
+        const testedCount = actualTestedCount > 0 ? actualTestedCount : (result.passed + result.failed + result.skipped);
+        return `${testedCount}/${totalCount} (${summary.join(', ')})`;
     }
 
     function hideAllTestSections() {
@@ -397,7 +411,8 @@
             case 'failed': return '❌';
             case 'skipped': return '⏭️';
             case 'partial': return '🔶';
-            default: return '⚫'; // Unknown/not run
+            case 'unknown': return '⚫'; // Gray circle for not run yet
+            default: return '⚫';
         }
     }
 
