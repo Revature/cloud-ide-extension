@@ -1,207 +1,363 @@
-// Updated TestRunner to track individual test results
-// src/testing/testRunner.ts
-
+// src/testing/testRunner.ts - Enhanced version
 import * as vscode from 'vscode';
-import { spawn } from 'child_process';
-import { TestCase } from './testDetector';
+import * as path from 'path';
+import { exec } from 'child_process';
+import * as crypto from 'crypto';
+import { TestCase, ProjectTestInfo } from './testDetector';
+import { TestFileManager, TestRunResult, TestDetail } from './testFileManager';
 
-export interface TestResult {
-    testCase: TestCase;
-    status: 'passed' | 'failed' | 'skipped' | 'error' | 'unknown';
-    duration: number;
-    output: string;
-    error?: string;
-}
-
-export interface TestRunResult {
-    success: boolean;
-    totalTests: number;
-    passed: number;
-    failed: number;
-    skipped: number;
-    duration: number;
-    output: string;
-    results: TestResult[];
-    // Serialize as object for JSON transfer to webview
-    testResultsMap: { [key: string]: 'passed' | 'failed' | 'skipped' | 'unknown' };
+export interface TestRunOptions {
+    type: 'all' | 'single' | 'class';
+    testCase?: TestCase;
+    className?: string;
 }
 
 export class TestRunner {
-    private outputChannel: vscode.OutputChannel;
+    private testFileManager: TestFileManager;
+    private workspacePath: string;
 
-    constructor() {
-        this.outputChannel = vscode.window.createOutputChannel('Test Runner');
+    constructor(workspacePath: string) {
+        this.workspacePath = workspacePath;
+        this.testFileManager = new TestFileManager(workspacePath);
     }
 
-    async runTests(command: string, workspacePath: string): Promise<TestRunResult> {
-        this.outputChannel.clear();
-        this.outputChannel.show();
-        this.outputChannel.appendLine(`Running command: ${command}`);
-        this.outputChannel.appendLine('─'.repeat(50));
-
+    async runTests(projectInfo: ProjectTestInfo, options: TestRunOptions): Promise<TestRunResult> {
+        const runId = this.generateRunId();
         const startTime = Date.now();
         
         try {
-            const isWindows = process.platform === 'win32';
-            const shell = isWindows ? 'cmd' : 'bash';
-            const shellArgs = isWindows ? ['/c'] : ['-c'];
+            // Get the appropriate command
+            const command = this.buildTestCommand(projectInfo, options);
             
-            return new Promise((resolve) => {
-                const childProcess = spawn(shell, [...shellArgs, command], {
-                    cwd: workspacePath,
-                    stdio: ['pipe', 'pipe', 'pipe']
-                });
-
-                let output = '';
-                let errorOutput = '';
-
-                childProcess.stdout?.on('data', (data: Buffer) => {
-                    const text = data.toString();
-                    output += text;
-                    this.outputChannel.append(text);
-                });
-
-                childProcess.stderr?.on('data', (data: Buffer) => {
-                    const text = data.toString();
-                    errorOutput += text;
-                    this.outputChannel.append(text);
-                });
-
-                childProcess.on('close', (code: number) => {
-                    const duration = Date.now() - startTime;
-                    const fullOutput = output + errorOutput;
-                    
-                    this.outputChannel.appendLine('─'.repeat(50));
-                    this.outputChannel.appendLine(`Process exited with code: ${code}`);
-                    this.outputChannel.appendLine(`Duration: ${duration}ms`);
-
-                    const result = this.parseTestOutput(fullOutput, duration);
-                    result.success = code === 0;
-                    
-                    resolve(result);
-                });
-
-                childProcess.on('error', (error: Error) => {
-                    this.outputChannel.appendLine(`Error: ${error.message}`);
-                    resolve({
-                        success: false,
-                        totalTests: 0,
-                        passed: 0,
-                        failed: 1,
-                        skipped: 0,
-                        duration: Date.now() - startTime,
-                        output: error.message,
-                        results: [],
-                        testResultsMap: {}
-                    });
-                });
-            });
-        } catch (error) {
-            const duration = Date.now() - startTime;
-            this.outputChannel.appendLine(`Failed to run tests: ${error}`);
+            // Execute the test command
+            const output = await this.executeCommand(command);
             
-            return {
-                success: false,
-                totalTests: 0,
-                passed: 0,
-                failed: 1,
-                skipped: 0,
-                duration,
-                output: error instanceof Error ? error.message : String(error),
-                results: [],
-                testResultsMap: {}
+            // Parse the test results
+            const testDetails = await this.parseTestOutput(output, projectInfo, options);
+            
+            // Calculate summary
+            const summary = this.calculateSummary(testDetails);
+            
+            const result: TestRunResult = {
+                runId,
+                timestamp: new Date(),
+                runType: options.type,
+                targetTest: options.testCase?.name,
+                targetClass: options.className,
+                ...summary,
+                duration: Date.now() - startTime,
+                testDetails,
+                command,
+                output
             };
+
+            // Save results with change detection
+            await this.testFileManager.saveTestResults(result);
+            
+            // Show status changes notification
+            await this.notifyStatusChanges(result);
+            
+            return result;
+
+        } catch (error) {
+            // Create error result
+            const errorResult: TestRunResult = {
+                runId,
+                timestamp: new Date(),
+                runType: options.type,
+                targetTest: options.testCase?.name,
+                targetClass: options.className,
+                passed: 0,
+                failed: 0,
+                skipped: 0,
+                total: 0,
+                duration: Date.now() - startTime,
+                testDetails: [],
+                command: this.buildTestCommand(projectInfo, options),
+                output: error instanceof Error ? error.message : String(error)
+            };
+
+            await this.testFileManager.saveTestResults(errorResult);
+            throw error;
         }
     }
 
-    private parseTestOutput(output: string, duration: number): TestRunResult {
+    private buildTestCommand(projectInfo: ProjectTestInfo, options: TestRunOptions): string {
+        switch (projectInfo.projectType) {
+            case 'java':
+                return this.buildJavaCommand(options);
+            default:
+                throw new Error(`Unsupported project type: ${projectInfo.projectType}`);
+        }
+    }
+
+    private buildJavaCommand(options: TestRunOptions): string {
+        switch (options.type) {
+            case 'all':
+                return 'mvn test';
+            case 'single':
+                if (!options.testCase) {
+                    throw new Error('Test case required for single test run');
+                }
+                return `mvn test -Dtest=${options.testCase.className}#${options.testCase.name}`;
+            case 'class':
+                if (!options.className) {
+                    throw new Error('Class name required for class test run');
+                }
+                return `mvn test -Dtest=${options.className}`;
+            default:
+                throw new Error(`Unsupported run type: ${options.type}`);
+        }
+    }
+
+    private executeCommand(command: string): Promise<string> {
+        return new Promise((resolve, reject) => {
+            exec(command, { 
+                cwd: this.workspacePath,
+                maxBuffer: 1024 * 1024 * 10 // 10MB buffer
+            }, (error, stdout, stderr) => {
+                const output = stdout + stderr;
+                
+                if (error) {
+                    // For Maven, non-zero exit code doesn't always mean error
+                    // Tests can fail but Maven still produces valid output
+                    if (output.includes('[INFO] BUILD SUCCESS') || 
+                        output.includes('[INFO] BUILD FAILURE') ||
+                        output.includes('Tests run:')) {
+                        resolve(output);
+                    } else {
+                        reject(new Error(`Command failed: ${error.message}\n${output}`));
+                    }
+                } else {
+                    resolve(output);
+                }
+            });
+        });
+    }
+
+    private async parseTestOutput(output: string, projectInfo: ProjectTestInfo, options: TestRunOptions): Promise<TestDetail[]> {
+        const testDetails: TestDetail[] = [];
+        
+        switch (projectInfo.projectType) {
+            case 'java':
+                return this.parseJavaTestOutput(output, projectInfo, options);
+            default:
+                throw new Error(`Unsupported project type for parsing: ${projectInfo.projectType}`);
+        }
+    }
+
+    private parseJavaTestOutput(output: string, projectInfo: ProjectTestInfo, options: TestRunOptions): TestDetail[] {
+        const testDetails: TestDetail[] = [];
         const lines = output.split('\n');
         
-        let totalTests = 0;
-        let passed = 0;
-        let failed = 0;
-        let skipped = 0;
-        const testResultsMap = new Map<string, 'passed' | 'failed' | 'skipped' | 'unknown'>();
-        const results: TestResult[] = [];
-
-        // Parse Maven test output for summary
-        for (const line of lines) {
-            if (line.includes('Tests run:')) {
-                const match = line.match(/Tests run: (\d+), Failures: (\d+), Errors: (\d+), Skipped: (\d+)/);
-                if (match) {
-                    totalTests = parseInt(match[1]);
-                    const failures = parseInt(match[2]);
-                    const errors = parseInt(match[3]);
-                    skipped = parseInt(match[4]);
-                    failed = failures + errors;
-                    passed = totalTests - failed - skipped;
-                    break;
-                }
-            }
-        }
-
-        // Parse individual test results from Maven output
+        // Parse Maven Surefire output
+        let inTestResults = false;
+        let currentClass = '';
+        
         for (let i = 0; i < lines.length; i++) {
-            const line = lines[i];
+            const line = lines[i].trim();
             
-            // Look for test method results in Maven output format
-            // Example: "test(com.example.MyTestClass)  Time elapsed: 0.001 s  <<< FAILURE!"
-            // or "testMethod(com.example.MyTestClass)  Time elapsed: 0.001 s"
-            const testResultMatch = line.match(/(\w+)\(([^)]+)\)\s+Time elapsed: ([\d.]+) s(?:\s+<<<\s+(\w+))?/);
-            if (testResultMatch) {
-                const methodName = testResultMatch[1];
-                const className = testResultMatch[2];
-                const testDuration = parseFloat(testResultMatch[3]) * 1000; // Convert to ms
-                const status = testResultMatch[4];
-                
-                let testStatus: 'passed' | 'failed' | 'skipped' | 'unknown' = 'passed';
-                if (status === 'FAILURE' || status === 'ERROR') {
-                    testStatus = 'failed';
-                } else if (status === 'SKIPPED') {
-                    testStatus = 'skipped';
+            // Look for test class being run
+            if (line.includes('Running ')) {
+                const classMatch = line.match(/Running (.+)/);
+                if (classMatch) {
+                    currentClass = classMatch[1];
                 }
-                
-                const testKey = `${className}#${methodName}`;
-                testResultsMap.set(testKey, testStatus);
-                testResultsMap.set(methodName, testStatus); // Also store by method name for easier lookup
-                
-                // Try to create a TestResult object
-                results.push({
-                    testCase: {
-                        name: methodName,
-                        className: className,
-                        filePath: '', // Not available from Maven output
-                        line: 0,
-                        type: 'method'
-                    },
-                    status: testStatus,
-                    duration: testDuration,
-                    output: line,
-                    error: status === 'FAILURE' || status === 'ERROR' ? 'Test failed' : undefined
-                });
+                continue;
+            }
+            
+            // Look for individual test results
+            if (line.includes('Test ') && (line.includes('PASSED') || line.includes('FAILED') || line.includes('SKIPPED'))) {
+                const testDetail = this.parseTestLine(line, currentClass);
+                if (testDetail) {
+                    testDetails.push(testDetail);
+                }
+                continue;
+            }
+            
+            // Alternative parsing for different Maven output formats
+            if (line.match(/^\s*\w+\(\w+\)\s+Time elapsed:/)) {
+                const testDetail = this.parseAlternativeTestLine(line, currentClass);
+                if (testDetail) {
+                    testDetails.push(testDetail);
+                }
+                continue;
             }
         }
+        
+        // If no individual test details found, try to infer from summary
+        if (testDetails.length === 0) {
+            testDetails.push(...this.inferTestDetailsFromSummary(output, projectInfo, options));
+        }
+        
+        return testDetails;
+    }
 
-        // Convert Map to object for JSON serialization
-        const testResultsMapObject: { [key: string]: 'passed' | 'failed' | 'skipped' | 'unknown' } = {};
-        testResultsMap.forEach((value, key) => {
-            testResultsMapObject[key] = value;
-        });
-
+    private parseTestLine(line: string, currentClass: string): TestDetail | null {
+        // Parse line like: "Test methodName PASSED" or "Test methodName FAILED"
+        const match = line.match(/Test (\w+) (PASSED|FAILED|SKIPPED)/);
+        if (!match) return null;
+        
+        const [, methodName, statusStr] = match;
+        const status = statusStr.toLowerCase() as 'passed' | 'failed' | 'skipped';
+        
         return {
-            success: failed === 0,
-            totalTests,
-            passed,
-            failed,
-            skipped,
-            duration,
-            output,
-            results,
-            testResultsMap: testResultsMapObject
+            name: methodName,
+            className: currentClass,
+            status,
+            duration: this.extractDuration(line)
         };
     }
 
-    dispose() {
-        this.outputChannel.dispose();
+    private parseAlternativeTestLine(line: string, currentClass: string): TestDetail | null {
+        // Parse line like: "testMethod(ClassName)  Time elapsed: 0.001 s"
+        const match = line.match(/(\w+)\((\w+)\)\s+Time elapsed: ([\d.]+)/);
+        if (!match) return null;
+        
+        const [, methodName, className, durationStr] = match;
+        
+        // Determine status based on surrounding context or default to passed
+        let status: 'passed' | 'failed' | 'skipped' = 'passed';
+        if (line.includes('FAILURE') || line.includes('ERROR')) {
+            status = 'failed';
+        } else if (line.includes('SKIPPED')) {
+            status = 'skipped';
+        }
+        
+        return {
+            name: methodName,
+            className: className,
+            status,
+            duration: parseFloat(durationStr) * 1000 // Convert to milliseconds
+        };
+    }
+
+    private inferTestDetailsFromSummary(output: string, projectInfo: ProjectTestInfo, options: TestRunOptions): TestDetail[] {
+        const testDetails: TestDetail[] = [];
+        
+        // Get all test methods that should have been run
+        const relevantTests = this.getRelevantTestCases(projectInfo, options);
+        
+        // Parse summary line like "Tests run: 1, Failures: 0, Errors: 0, Skipped: 0"
+        const summaryMatch = output.match(/Tests run: (\d+),\s*Failures: (\d+),\s*Errors: (\d+),\s*Skipped: (\d+)/);
+        
+        if (summaryMatch && relevantTests.length > 0) {
+            const [, run, failures, errors, skipped] = summaryMatch;
+            const totalRun = parseInt(run);
+            const totalFailed = parseInt(failures) + parseInt(errors);
+            const totalSkipped = parseInt(skipped);
+            const totalPassed = totalRun - totalFailed - totalSkipped;
+            
+            // If we have exactly the right number of tests, we can make educated guesses
+            if (totalRun === relevantTests.length) {
+                let passedCount = 0;
+                let failedCount = 0;
+                let skippedCount = 0;
+                
+                for (const testCase of relevantTests) {
+                    if (testCase.type !== 'method') continue;
+                    
+                    // Simple heuristic: if output contains error/failure mentioning this test, mark as failed
+                    let status: 'passed' | 'failed' | 'skipped' = 'passed';
+                    
+                    if (skippedCount < totalSkipped && this.isTestSkipped(output, testCase.name)) {
+                        status = 'skipped';
+                        skippedCount++;
+                    } else if (failedCount < totalFailed && this.isTestFailed(output, testCase.name)) {
+                        status = 'failed';
+                        failedCount++;
+                    } else if (passedCount < totalPassed) {
+                        status = 'passed';
+                        passedCount++;
+                    }
+                    
+                    testDetails.push({
+                        name: testCase.name,
+                        className: testCase.className,
+                        status
+                    });
+                }
+            }
+        }
+        
+        return testDetails;
+    }
+
+    private getRelevantTestCases(projectInfo: ProjectTestInfo, options: TestRunOptions): TestCase[] {
+        switch (options.type) {
+            case 'all':
+                return projectInfo.testCases.filter(tc => tc.type === 'method');
+            case 'single':
+                return options.testCase ? [options.testCase] : [];
+            case 'class':
+                return projectInfo.testCases.filter(tc => 
+                    tc.type === 'method' && tc.className === options.className
+                );
+            default:
+                return [];
+        }
+    }
+
+    private isTestSkipped(output: string, methodName: string): boolean {
+        return output.includes(`${methodName}`) && 
+               (output.includes('SKIPPED') || output.includes('@Ignore'));
+    }
+
+    private isTestFailed(output: string, methodName: string): boolean {
+        return output.includes(`${methodName}`) && 
+               (output.includes('FAILURE') || output.includes('ERROR') || output.includes('AssertionError'));
+    }
+
+    private extractDuration(line: string): number | undefined {
+        const match = line.match(/(\d+\.?\d*)\s*s/);
+        return match ? parseFloat(match[1]) * 1000 : undefined;
+    }
+
+    private calculateSummary(testDetails: TestDetail[]): { passed: number; failed: number; skipped: number; total: number } {
+        const passed = testDetails.filter(t => t.status === 'passed').length;
+        const failed = testDetails.filter(t => t.status === 'failed').length;
+        const skipped = testDetails.filter(t => t.status === 'skipped').length;
+        
+        return {
+            passed,
+            failed,
+            skipped,
+            total: testDetails.length
+        };
+    }
+
+    private generateRunId(): string {
+        return crypto.randomBytes(8).toString('hex');
+    }
+
+    private async notifyStatusChanges(result: TestRunResult): Promise<void> {
+        const changes = await this.testFileManager.getTestStatusChanges();
+        const recentChanges = changes.filter(change => 
+            change.lastRunId === result.runId && change.statusChanged
+        );
+        
+        if (recentChanges.length > 0) {
+            const changeMessages = recentChanges.map(change => {
+                const emoji = change.currentStatus === 'passed' ? '✅' : 
+                             change.currentStatus === 'failed' ? '❌' : '⏭️';
+                const previousEmoji = change.previousStatus === 'passed' ? '✅' : 
+                                     change.previousStatus === 'failed' ? '❌' : '⏭️';
+                
+                return `${change.testKey}: ${previousEmoji} → ${emoji}`;
+            });
+            
+            vscode.window.showInformationMessage(
+                `Test status changes detected:\n${changeMessages.join('\n')}`,
+                { modal: false }
+            );
+        }
+    }
+
+    async getLastResult(): Promise<TestRunResult | undefined> {
+        return await this.testFileManager.loadTestResults();
+    }
+
+    getTestFileManager(): TestFileManager {
+        return this.testFileManager;
     }
 }

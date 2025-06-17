@@ -270,38 +270,461 @@
         });
     }
 
-    function showTestResults(resultsData) {
+    function showTestResults(data) {
         testResultsSection.style.display = 'block';
         
-        const result = resultsData.result;
-        const statusIcon = result.success ? '✅' : '❌';
-        const statusText = result.success ? 'PASSED' : 'FAILED';
-        const statusClass = result.success ? 'result-success' : 'result-failure';
+        const result = data.result;
+        const timestamp = new Date(result.timestamp);
         
-        const timestamp = new Date(resultsData.timestamp).toLocaleString();
-        const testTypeText = getTestTypeText(resultsData.testType, resultsData.targetName);
+        // Update basic info
+        testResultsTitle.textContent = `Test Results (${getRunTypeText(result)})`;
+        testResultsTime.textContent = `Completed: ${timestamp.toLocaleString()}`;
+        testResultsDuration.textContent = `Duration: ${(result.duration / 1000).toFixed(2)}s`;
         
-        testResults.innerHTML = `
-            <div class="test-result-summary ${statusClass}">
-                <div class="result-header">
-                    <span class="result-icon">${statusIcon}</span>
-                    <span class="result-status">${statusText}</span>
-                    <span class="result-duration">${result.duration}ms</span>
-                </div>
-                <div class="result-details">
-                    <div class="result-info">
-                        <strong>Test Type:</strong> ${testTypeText}<br>
-                        <strong>Executed:</strong> ${timestamp}
-                    </div>
-                    <div class="result-stats">
-                        <span class="stat-item">Total: ${result.totalTests}</span>
-                        <span class="stat-item passed">Passed: ${result.passed}</span>
-                        <span class="stat-item failed">Failed: ${result.failed}</span>
-                        <span class="stat-item skipped">Skipped: ${result.skipped}</span>
-                    </div>
-                </div>
+        // Update summary with status change indicators
+        updateTestSummaryWithChanges(result);
+        
+        // Show individual test results with change indicators
+        showTestCaseResults(result.testDetails, data.statusChanges || []);
+        
+        // Update the total count display
+        if (currentTestData.projectInfo) {
+            const totalTestsText = getTotalTestsText(currentTestData.projectInfo.methodCount || 0);
+            testTotalTests.innerHTML = totalTestsText;
+        }
+    }
+
+    function showTestCaseResults(testDetails, statusChanges = []) {
+        testCasesList.innerHTML = '';
+        
+        // Group test details by class
+        const testsByClass = {};
+        testDetails.forEach(test => {
+            if (!testsByClass[test.className]) {
+                testsByClass[test.className] = [];
+            }
+            testsByClass[test.className].push(test);
+        });
+        
+        // Create UI for each class
+        Object.entries(testsByClass).forEach(([className, tests]) => {
+            const classDiv = document.createElement('div');
+            classDiv.className = 'test-class-group';
+            
+            const classHeader = document.createElement('div');
+            classHeader.className = 'test-class-header';
+            classHeader.innerHTML = `
+                <span class="test-class-name">${getSimpleClassName(className)}</span>
+                <span class="test-class-count">${tests.length} test${tests.length !== 1 ? 's' : ''}</span>
+            `;
+            classDiv.appendChild(classHeader);
+            
+            const testsContainer = document.createElement('div');
+            testsContainer.className = 'test-methods-container';
+            
+            tests.forEach(test => {
+                const testDiv = createTestCaseElement(test, statusChanges);
+                testsContainer.appendChild(testDiv);
+            });
+            
+            classDiv.appendChild(testsContainer);
+            testCasesList.appendChild(classDiv);
+        });
+    }
+
+    function createTestCaseElement(test, statusChanges) {
+        const testDiv = document.createElement('div');
+        testDiv.className = `test-case-item test-${test.status}`;
+        
+        // Check if this test has status changes
+        const testKey = `${test.className}.${test.name}`;
+        const statusChange = statusChanges.find(change => change.testKey === testKey);
+        
+        let statusIcon = getStatusIcon(test.status);
+        let changeIndicator = '';
+        
+        if (statusChange && statusChange.statusChanged) {
+            const previousIcon = getStatusIcon(statusChange.previousStatus);
+            changeIndicator = `
+                <span class="status-change-indicator" title="Status changed from ${statusChange.previousStatus} to ${test.status}">
+                    ${previousIcon} → ${statusIcon}
+                </span>
+            `;
+            testDiv.classList.add('status-changed');
+        }
+        
+        const durationText = test.duration ? ` (${(test.duration / 1000).toFixed(3)}s)` : '';
+        
+        testDiv.innerHTML = `
+            <div class="test-case-header">
+                <span class="test-status-icon">${statusIcon}</span>
+                <span class="test-method-name">${test.name}</span>
+                ${changeIndicator}
+                <span class="test-duration">${durationText}</span>
             </div>
+            ${test.errorMessage ? `<div class="test-error-message">${escapeHtml(test.errorMessage)}</div>` : ''}
+            ${test.stackTrace ? `<div class="test-stack-trace"><pre>${escapeHtml(test.stackTrace)}</pre></div>` : ''}
         `;
+        
+        // Add click handler to show/hide error details
+        if (test.errorMessage || test.stackTrace) {
+            testDiv.addEventListener('click', () => {
+                testDiv.classList.toggle('expanded');
+            });
+            testDiv.classList.add('expandable');
+        }
+        
+        return testDiv;
+    }
+    
+    function getStatusIcon(status) {
+        switch (status) {
+            case 'passed': return '✅';
+            case 'failed': return '❌';
+            case 'skipped': return '⏭️';
+            default: return '❓';
+        }
+    }
+    
+    function getRunTypeText(result) {
+        switch (result.runType) {
+            case 'all': return 'All Tests';
+            case 'single': return `Single Test: ${result.targetTest}`;
+            case 'class': return `Class: ${getSimpleClassName(result.targetClass)}`;
+            default: return 'Tests';
+        }
+    }
+    
+    function getSimpleClassName(fullClassName) {
+        return fullClassName ? fullClassName.split('.').pop() : 'Unknown';
+    }
+    
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // Enhanced test status tracking
+    function updateTestStatusDisplay() {
+        if (!currentTestData.projectInfo || !testResultsData) {
+            return;
+        }
+        
+        const projectInfo = currentTestData.projectInfo;
+        const result = testResultsData.result;
+        
+        // Update each test case with status information
+        const testMethods = projectInfo.testCases.filter(tc => tc.type === 'method');
+        
+        testMethods.forEach(testCase => {
+            const testDetail = result.testDetails.find(detail => 
+                detail.name === testCase.name && detail.className === testCase.className
+            );
+            
+            if (testDetail) {
+                // Update the test case display with current status
+                updateTestCaseStatusInList(testCase, testDetail);
+            }
+        });
+    }
+
+    // Enhanced message handling for status changes
+    function handleTestResultsUpdate(message) {
+        testResultsData = message.data;
+        
+        if (testResultsData && testResultsData.statusChanges) {
+            // Show status change notifications
+            showStatusChangeNotifications(testResultsData.statusChanges);
+        }
+        
+        updateTestUI();
+        updateTestStatusDisplay();
+    }
+
+    function showStatusChangeNotifications(statusChanges) {
+        const recentChanges = statusChanges.filter(change => change.statusChanged);
+        
+        if (recentChanges.length > 0) {
+            // Create a temporary notification element
+            const notification = document.createElement('div');
+            notification.className = 'status-change-notification';
+            notification.innerHTML = `
+                <div class="notification-header">
+                    <span class="notification-icon">🔄</span>
+                    <span class="notification-title">Test Status Changes Detected</span>
+                    <button class="notification-close" onclick="this.parentElement.parentElement.remove()">×</button>
+                </div>
+                <div class="notification-body">
+                    ${recentChanges.map(change => `
+                        <div class="status-change-item">
+                            <span class="test-name">${change.testKey.split('.').pop()}</span>
+                            <span class="status-change">
+                                ${getStatusIcon(change.previousStatus)} → ${getStatusIcon(change.currentStatus)}
+                            </span>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            
+            // Add to the top of the test section
+            const testSection = document.querySelector('.test-section');
+            if (testSection) {
+                testSection.insertBefore(notification, testSection.firstChild);
+                
+                // Auto-remove after 10 seconds
+                setTimeout(() => {
+                    if (notification.parentElement) {
+                        notification.remove();
+                    }
+                }, 10000);
+            }
+        }
+    }
+    
+    // Enhanced getTotalTestsText with better change tracking
+    function getTotalTestsText(methodCount) {
+        if (!testResultsData || !testResultsData.result) {
+            return methodCount.toString();
+        }
+        
+        const result = testResultsData.result;
+        const summary = [];
+        
+        // Count status changes
+        let changedCount = 0;
+        if (testResultsData.statusChanges) {
+            changedCount = testResultsData.statusChanges.filter(c => c.statusChanged).length;
+        }
+        
+        if (result.passed > 0) summary.push(`✅ ${result.passed} passed`);
+        if (result.failed > 0) summary.push(`❌ ${result.failed} failed`);
+        if (result.skipped > 0) summary.push(`⏭️ ${result.skipped} skipped`);
+        if (changedCount > 0) summary.push(`🔄 ${changedCount} changed`);
+        
+        if (summary.length === 0) {
+            return methodCount.toString();
+        }
+        
+        // Calculate tests that were actually executed
+        const executedCount = result.passed + result.failed + result.skipped;
+        return `${executedCount}/${methodCount} (${summary.join(', ')})`;
+    }
+    
+    // Update the message listener to handle status changes
+    window.addEventListener('message', event => {
+        const message = event.data;
+        
+        switch (message.command) {
+            case 'updateSessionEndTime':
+                sessionEndTime = new Date(message.sessionEndTime);
+                if (message.expiryNotificationTime) {
+                    expiryNotificationTime = message.expiryNotificationTime * 60 * 1000;
+                } else {
+                    expiryNotificationTime = 10 * 60 * 1000;
+                }
+                endTimeDisplay.textContent = 'Ends at: ' + sessionEndTime.toLocaleString();
+                
+                if (countdownInterval) {
+                    clearInterval(countdownInterval);
+                }
+                updateCountdown();
+                countdownInterval = setInterval(updateCountdown, 1000);
+                break;
+                
+            case 'updateTestData':
+                currentTestData = message.data;
+                updateTestUI();
+                break;
+                
+            case 'updateTestResults':
+                handleTestResultsUpdate(message);
+                break;
+                
+            case 'testRunStarted':
+                // Show test running indicator
+                showTestRunningIndicator(message.runType, message.target);
+                break;
+                
+            case 'testRunCompleted':
+                // Hide test running indicator
+                hideTestRunningIndicator();
+                break;
+        }
+    });
+    
+    function showTestRunningIndicator(runType, target) {
+        // Create or update running indicator
+        let indicator = document.getElementById('test-running-indicator');
+        if (!indicator) {
+            indicator = document.createElement('div');
+            indicator.id = 'test-running-indicator';
+            indicator.className = 'test-running-indicator';
+            
+            const testSection = document.querySelector('.test-section');
+            if (testSection) {
+                testSection.insertBefore(indicator, testSection.querySelector('.test-header').nextSibling);
+            }
+        }
+        
+        let message = 'Running tests...';
+        switch (runType) {
+            case 'all':
+                message = '⚡ Running all tests...';
+                break;
+            case 'single':
+                message = `⚡ Running test: ${target}...`;
+                break;
+            case 'class':
+                message = `⚡ Running test class: ${getSimpleClassName(target)}...`;
+                break;
+        }
+        
+        indicator.innerHTML = `
+            <div class="running-spinner">🔄</div>
+            <div class="running-message">${message}</div>
+        `;
+        indicator.style.display = 'flex';
+    }
+    
+    function hideTestRunningIndicator() {
+        const indicator = document.getElementById('test-running-indicator');
+        if (indicator) {
+            indicator.style.display = 'none';
+        }
+    }
+    
+    // Add some utility functions for better test management
+    function refreshAllTests() {
+        vscode.postMessage({ command: 'refreshTests' });
+    }
+    
+    function openTestFile(filePath, lineNumber) {
+        vscode.postMessage({ 
+            command: 'openFile',
+            filePath: filePath,
+            lineNumber: lineNumber
+        });
+    }
+    
+    function copyTestCommand(testCase) {
+        // Copy the Maven command to clipboard
+        const command = `mvn test -Dtest=${testCase.className}#${testCase.name}`;
+        navigator.clipboard.writeText(command).then(() => {
+            showTemporaryMessage('Test command copied to clipboard!');
+        });
+    }
+    
+    function showTemporaryMessage(message, duration = 3000) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'temporary-message';
+        messageDiv.textContent = message;
+        messageDiv.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--vscode-notificationToast-border);
+            color: var(--vscode-notificationToast-foreground);
+            padding: 8px 16px;
+            border-radius: 4px;
+            z-index: 1000;
+            animation: slideIn 0.3s ease-out;
+        `;
+        
+        document.body.appendChild(messageDiv);
+        
+        setTimeout(() => {
+            messageDiv.style.animation = 'slideOut 0.3s ease-in';
+            setTimeout(() => messageDiv.remove(), 300);
+        }, duration);
+    }
+
+    function updateTestCaseStatusInList(testCase, testDetail) {
+        // Find the test case element in the UI and update its status
+        const testElements = document.querySelectorAll('.test-method');
+        
+        testElements.forEach(element => {
+            const methodName = element.querySelector('.test-method-name');
+            if (methodName && methodName.textContent === testCase.name) {
+                const statusSpan = element.querySelector('.test-method-status');
+                if (statusSpan) {
+                    statusSpan.textContent = getStatusIcon(testDetail.status);
+                    
+                    // Update CSS classes for styling
+                    element.classList.remove('test-passed', 'test-failed', 'test-skipped');
+                    element.classList.add(`test-${testDetail.status}`);
+                }
+            }
+        });
+    }
+
+    // Enhanced message handling for status changes
+    function handleTestResultsUpdate(message) {
+        testResultsData = message.data;
+        
+        if (testResultsData && testResultsData.statusChanges) {
+            // Show status change notifications
+            showStatusChangeNotifications(testResultsData.statusChanges);
+        }
+        
+        updateTestUI();
+        updateTestStatusDisplay();
+    }
+
+    function showStatusChangeNotifications(statusChanges) {
+        const recentChanges = statusChanges.filter(change => change.statusChanged);
+        
+        if (recentChanges.length > 0) {
+            // Create a temporary notification element
+            const notification = document.createElement('div');
+            notification.className = 'status-change-notification';
+            notification.innerHTML = `
+                <div class="notification-header">
+                    <span class="notification-icon">🔄</span>
+                    <span class="notification-title">Test Status Changes Detected</span>
+                    <button class="notification-close" onclick="this.parentElement.parentElement.remove()">×</button>
+                </div>
+                <div class="notification-body">
+                    ${recentChanges.map(change => `
+                        <div class="status-change-item">
+                            <span class="test-name">${change.testKey.split('.').pop()}</span>
+                            <span class="status-change">
+                                ${getStatusIcon(change.previousStatus)} → ${getStatusIcon(change.currentStatus)}
+                            </span>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            
+            // Add to the top of the test section
+            const testSection = document.querySelector('.test-section');
+            if (testSection) {
+                testSection.insertBefore(notification, testSection.firstChild);
+                
+                // Auto-remove after 10 seconds
+                setTimeout(() => {
+                    if (notification.parentElement) {
+                        notification.remove();
+                    }
+                }, 10000);
+            }
+        }
+    }
+
+    function updateTestSummaryWithChanges(result) {
+        let summaryHTML = '';
+        
+        if (result.passed > 0) {
+            summaryHTML += `<span class="test-status passed">✅ ${result.passed} passed</span>`;
+        }
+        if (result.failed > 0) {
+            summaryHTML += `<span class="test-status failed">❌ ${result.failed} failed</span>`;
+        }
+        if (result.skipped > 0) {
+            summaryHTML += `<span class="test-status skipped">⏭️ ${result.skipped} skipped</span>`;
+        }
+        
+        testResultsSummary.innerHTML = summaryHTML;
     }
 
     function getTestTypeText(testType, targetName) {
