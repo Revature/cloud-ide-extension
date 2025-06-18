@@ -1,4 +1,4 @@
-// src/testing/testRunner.ts - Fixed version
+// src/testing/testRunner.ts - Fixed version with testResultsMap
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { exec } from 'child_process';
@@ -38,6 +38,15 @@ export class TestRunner implements vscode.Disposable {
             // Calculate summary
             const summary = this.calculateSummary(testDetails);
             
+            // Create test results map
+            const testResultsMap: { [key: string]: 'passed' | 'failed' | 'skipped' } = {};
+            testDetails.forEach(test => {
+                const fullKey = `${test.className}#${test.name}`;
+                const shortKey = test.name;
+                testResultsMap[fullKey] = test.status;
+                testResultsMap[shortKey] = test.status;
+            });
+            
             const result: TestRunResult = {
                 runId,
                 timestamp: new Date(),
@@ -50,6 +59,7 @@ export class TestRunner implements vscode.Disposable {
                 total: summary.total,
                 duration: Date.now() - startTime,
                 testDetails,
+                testResultsMap,
                 command,
                 output
             };
@@ -63,7 +73,7 @@ export class TestRunner implements vscode.Disposable {
             return result;
 
         } catch (error) {
-            // Create error result
+            // Create error result with empty testResultsMap
             const errorResult: TestRunResult = {
                 runId,
                 timestamp: new Date(),
@@ -76,6 +86,7 @@ export class TestRunner implements vscode.Disposable {
                 total: 0,
                 duration: Date.now() - startTime,
                 testDetails: [],
+                testResultsMap: {}, // Add empty map for error case
                 command: this.buildTestCommand(projectInfo, options),
                 output: error instanceof Error ? error.message : String(error)
             };
