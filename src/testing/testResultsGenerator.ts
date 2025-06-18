@@ -2,7 +2,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { TestRunResult } from './testRunner';
+import { TestRunResult } from './testFileManager';
 import { ProjectTestInfo, TestCase } from './testDetector';
 
 export interface TestResultsData {

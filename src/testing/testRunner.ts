@@ -1,4 +1,4 @@
-// src/testing/testRunner.ts - Enhanced version
+// src/testing/testRunner.ts - Fixed version
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { exec } from 'child_process';
@@ -12,7 +12,7 @@ export interface TestRunOptions {
     className?: string;
 }
 
-export class TestRunner {
+export class TestRunner implements vscode.Disposable {
     private testFileManager: TestFileManager;
     private workspacePath: string;
 
@@ -44,7 +44,10 @@ export class TestRunner {
                 runType: options.type,
                 targetTest: options.testCase?.name,
                 targetClass: options.className,
-                ...summary,
+                passed: summary.passed,
+                failed: summary.failed,
+                skipped: summary.skipped,
+                total: summary.total,
                 duration: Date.now() - startTime,
                 testDetails,
                 command,
@@ -136,8 +139,6 @@ export class TestRunner {
     }
 
     private async parseTestOutput(output: string, projectInfo: ProjectTestInfo, options: TestRunOptions): Promise<TestDetail[]> {
-        const testDetails: TestDetail[] = [];
-        
         switch (projectInfo.projectType) {
             case 'java':
                 return this.parseJavaTestOutput(output, projectInfo, options);
@@ -151,7 +152,6 @@ export class TestRunner {
         const lines = output.split('\n');
         
         // Parse Maven Surefire output
-        let inTestResults = false;
         let currentClass = '';
         
         for (let i = 0; i < lines.length; i++) {
@@ -359,5 +359,11 @@ export class TestRunner {
 
     getTestFileManager(): TestFileManager {
         return this.testFileManager;
+    }
+
+    // Required by vscode.Disposable interface
+    dispose(): void {
+        // Cleanup any resources if needed
+        // TestFileManager handles its own cleanup
     }
 }

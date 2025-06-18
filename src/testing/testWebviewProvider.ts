@@ -1,17 +1,27 @@
-// src/testing/testWebviewProvider.ts - Theia-compatible version
+// src/testing/testWebviewProvider.ts - Fixed version
 import * as vscode from 'vscode';
 import { TestDetectorService, ProjectTestInfo, TestCase } from './testDetector';
-import { TestRunner, TestRunResult } from './testRunner';
+import { TestRunner, TestRunOptions } from './testRunner';
+import { TestRunResult, TestFileManager } from './testFileManager';
 
 export class TestWebviewProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
     private testDetectorService: TestDetectorService;
-    private testRunner: TestRunner;
+    private testRunner?: TestRunner;
+    private testFileManager?: TestFileManager;
     private currentProjectInfo?: ProjectTestInfo;
 
     constructor(private readonly _extensionUri: vscode.Uri) {
         this.testDetectorService = new TestDetectorService();
-        this.testRunner = new TestRunner();
+    }
+
+    private initializeTestRunner() {
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (workspaceFolders && workspaceFolders.length > 0) {
+            const workspacePath = workspaceFolders[0].uri.fsPath;
+            this.testRunner = new TestRunner(workspacePath);
+            this.testFileManager = this.testRunner.getTestFileManager();
+        }
     }
 
     resolveWebviewView(
@@ -76,11 +86,23 @@ export class TestWebviewProvider implements vscode.WebviewViewProvider {
             const workspacePath = workspaceFolders[0].uri.fsPath;
             this.currentProjectInfo = await this.testDetectorService.detectProjectTests(workspacePath);
             
+            // Initialize test runner for this workspace
+            this.initializeTestRunner();
+            
             this.updateWebview({
                 hasWorkspace: true,
                 projectInfo: this.currentProjectInfo,
                 isLoading: false
             });
+
+            // Load existing test results if available
+            if (this.testFileManager) {
+                const lastResult = await this.testFileManager.loadTestResults();
+                if (lastResult) {
+                    const statusChanges = await this.testFileManager.getTestStatusChanges();
+                    this.sendTestResults(lastResult, statusChanges);
+                }
+            }
         } catch (error) {
             console.error('Error detecting tests:', error);
             this.updateWebview({
@@ -98,28 +120,35 @@ export class TestWebviewProvider implements vscode.WebviewViewProvider {
             return;
         }
 
-        const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (!workspaceFolders) return;
+        if (!this.testRunner) {
+            this.initializeTestRunner();
+        }
+
+        if (!this.testRunner) {
+            vscode.window.showErrorMessage('Failed to initialize test runner');
+            return;
+        }
 
         this.updateWebview({ isRunning: true });
 
         try {
-            const detector = this.testDetectorService.getDetectorForProject(this.currentProjectInfo.projectType);
-            if (!detector) {
-                throw new Error(`No test runner available for ${this.currentProjectInfo.projectType} projects`);
-            }
-
-            const command = detector.getRunAllCommand();
-            const result = await this.testRunner.runTests(command, workspaceFolders[0].uri.fsPath);
+            const options: TestRunOptions = { type: 'all' };
+            const result = await this.testRunner.runTests(this.currentProjectInfo, options);
+            
+            // Get status changes for display
+            const statusChanges = await this.testFileManager!.getTestStatusChanges();
+            
+            // Send detailed results to webview
+            this.sendTestResults(result, statusChanges);
             
             this.updateWebview({ 
                 isRunning: false,
                 lastResult: result
             });
 
-            if (result.success) {
+            if (result.failed === 0) {
                 vscode.window.showInformationMessage(
-                    `✅ All tests passed! (${result.passed}/${result.totalTests})`
+                    `✅ All tests passed! (${result.passed}/${result.total}) in ${(result.duration / 1000).toFixed(1)}s`
                 );
             } else {
                 vscode.window.showErrorMessage(
@@ -133,28 +162,31 @@ export class TestWebviewProvider implements vscode.WebviewViewProvider {
     }
 
     private async runSingleTest(testCase: TestCase) {
-        if (!this.currentProjectInfo) return;
-
-        const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (!workspaceFolders) return;
+        if (!this.currentProjectInfo || !this.testRunner) {
+            return;
+        }
 
         this.updateWebview({ isRunning: true });
 
         try {
-            const detector = this.testDetectorService.getDetectorForProject(this.currentProjectInfo.projectType);
-            if (!detector) {
-                throw new Error(`No test runner available for ${this.currentProjectInfo.projectType} projects`);
-            }
-
-            const command = detector.getRunSingleTestCommand(testCase);
-            const result = await this.testRunner.runTests(command, workspaceFolders[0].uri.fsPath);
+            const options: TestRunOptions = { 
+                type: 'single', 
+                testCase: testCase 
+            };
+            const result = await this.testRunner.runTests(this.currentProjectInfo, options);
+            
+            // Get status changes for display
+            const statusChanges = await this.testFileManager!.getTestStatusChanges();
+            
+            // Send detailed results to webview
+            this.sendTestResults(result, statusChanges);
             
             this.updateWebview({ 
                 isRunning: false,
                 lastResult: result
             });
 
-            if (result.success) {
+            if (result.failed === 0) {
                 vscode.window.showInformationMessage(`✅ Test ${testCase.name} passed!`);
             } else {
                 vscode.window.showErrorMessage(`❌ Test ${testCase.name} failed!`);
@@ -166,35 +198,52 @@ export class TestWebviewProvider implements vscode.WebviewViewProvider {
     }
 
     private async runTestClass(className: string) {
-        if (!this.currentProjectInfo) return;
-
-        const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (!workspaceFolders) return;
+        if (!this.currentProjectInfo || !this.testRunner) {
+            return;
+        }
 
         this.updateWebview({ isRunning: true });
 
         try {
-            const detector = this.testDetectorService.getDetectorForProject(this.currentProjectInfo.projectType);
-            if (!detector) {
-                throw new Error(`No test runner available for ${this.currentProjectInfo.projectType} projects`);
-            }
-
-            const command = detector.getRunClassCommand(className);
-            const result = await this.testRunner.runTests(command, workspaceFolders[0].uri.fsPath);
+            const options: TestRunOptions = { 
+                type: 'class', 
+                className: className 
+            };
+            const result = await this.testRunner.runTests(this.currentProjectInfo, options);
+            
+            // Get status changes for display
+            const statusChanges = await this.testFileManager!.getTestStatusChanges();
+            
+            // Send detailed results to webview
+            this.sendTestResults(result, statusChanges);
             
             this.updateWebview({ 
                 isRunning: false,
                 lastResult: result
             });
 
-            if (result.success) {
-                vscode.window.showInformationMessage(`✅ Test class ${className} passed!`);
+            const shortClassName = className.split('.').pop();
+            if (result.failed === 0) {
+                vscode.window.showInformationMessage(`✅ Test class ${shortClassName} passed!`);
             } else {
-                vscode.window.showErrorMessage(`❌ Test class ${className} failed!`);
+                vscode.window.showErrorMessage(`❌ Test class ${shortClassName} failed!`);
             }
         } catch (error) {
             this.updateWebview({ isRunning: false });
             vscode.window.showErrorMessage(`Failed to run test class: ${error}`);
+        }
+    }
+
+    private sendTestResults(result: TestRunResult, statusChanges: any[]) {
+        if (this._view) {
+            this._view.webview.postMessage({
+                command: 'updateTestResults',
+                data: {
+                    result: result,
+                    statusChanges: statusChanges,
+                    timestamp: new Date().toISOString()
+                }
+            });
         }
     }
 
@@ -408,7 +457,8 @@ export class TestWebviewProvider implements vscode.WebviewViewProvider {
                     document.getElementById('projectInfoSection').style.display = 'block';
                     document.getElementById('projectType').textContent = currentData.projectInfo.projectType.toUpperCase();
                     document.getElementById('testFramework').textContent = currentData.projectInfo.testFramework;
-                    document.getElementById('totalTests').textContent = currentData.projectInfo.testCases.length;
+                    // Fixed: Use methodCount instead of testCases.length
+                    document.getElementById('totalTests').textContent = currentData.projectInfo.methodCount || 0;
                     runAllBtn.disabled = false;
                 }
 
@@ -418,7 +468,19 @@ export class TestWebviewProvider implements vscode.WebviewViewProvider {
         `;
     }
 
-    dispose() {
-        this.testRunner.dispose();
+    // Add cleanup for old test results periodically
+    private async cleanupOldTestResults() {
+        if (this.testFileManager) {
+            try {
+                await this.testFileManager.cleanupOldResults();
+            } catch (error) {
+                console.error('Error cleaning up old test results:', error);
+            }
+        }
+    }
+
+    public dispose() {
+        this.cleanupOldTestResults();
+        // TestRunner dispose will be called automatically by vscode
     }
 }

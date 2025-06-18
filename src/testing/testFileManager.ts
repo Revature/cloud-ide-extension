@@ -38,7 +38,7 @@ export interface TestRunHistory {
 export interface TestStatusHistory {
     testKey: string; // className.methodName
     currentStatus: 'passed' | 'failed' | 'skipped' | 'unknown';
-    previousStatus?: 'passed' | 'failed' | 'skipped';
+    previousStatus?: 'passed' | 'failed' | 'skipped' | 'unknown';
     statusChanged: boolean;
     lastRunId?: string;
     changeTimestamp?: Date;
