@@ -162,7 +162,7 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
         });
 
         try {
-            const options: TestRunOptions = { type: 'all' };
+            const options: TestRunOptions = { type: 'all', showTerminal: true };
             const result = await this.testRunner.runTests(this.currentProjectInfo, options);
             
             // Get status changes for display
@@ -200,7 +200,8 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
         try {
             const options: TestRunOptions = { 
                 type: 'single', 
-                testCase: testCase 
+                testCase: testCase ,
+                showTerminal: true
             };
             const result = await this.testRunner.runTests(this.currentProjectInfo, options);
             
