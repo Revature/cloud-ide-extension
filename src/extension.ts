@@ -62,6 +62,75 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
         this.testDetectorService = new TestDetectorService();
     }
 
+    // REQUIRED: Implement the WebviewViewProvider interface
+    resolveWebviewView(
+        webviewView: vscode.WebviewView,
+        context: vscode.WebviewViewResolveContext,
+        _token: vscode.CancellationToken
+    ) {
+        this._view = webviewView;
+
+        webviewView.webview.options = {
+            enableScripts: true,
+            localResourceRoots: [this._extensionUri]
+        };
+
+        webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
+
+        // Handle messages from webview
+        webviewView.webview.onDidReceiveMessage(
+            async message => {
+                switch (message.command) {
+                    case 'getSessionEndTime':
+                        this.updateSessionTime();
+                        break;
+                    case 'addTime':
+                        vscode.commands.executeCommand('cloud-ide-extension.addTime', this);
+                        break;
+                    case 'openDevServer':
+                        vscode.commands.executeCommand('cloud-ide-extension.openDevServer');
+                        break;
+                    case 'showInfo':
+                        vscode.commands.executeCommand('cloud-ide-extension.showInfo');
+                        break;
+                    case 'detectTests':
+                        await this.detectTests();
+                        break;
+                    case 'refreshTests':
+                        await this.detectTests();
+                        break;
+                    case 'runAllTests':
+                        await this.runAllTests();
+                        break;
+                    case 'runTest':
+                        await this.runSingleTest(message.testCase);
+                        break;
+                    case 'runTestClass':
+                        await this.runTestClass(message.className);
+                        break;
+                }
+            }
+        );
+
+        // Initial load
+        this.refresh();
+    }
+
+    public refresh() {
+        this.updateSessionTime();
+        this.detectTests();
+    }
+
+    public updateSessionTime() {
+        if (this._view) {
+            this._view.webview.postMessage({
+                command: 'updateSessionEndTime',
+                sessionEndTime: runnerState.sessionEnd,
+                expiryNotificationTime: expiryNotificationTime
+            });
+        }
+    }
+
     private initializeTestRunner() {
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (workspaceFolders && workspaceFolders.length > 0) {
@@ -277,6 +346,47 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
                 data: data
             });
         }
+    }
+
+    private _getHtmlForWebview(webview: vscode.Webview) {
+        // Get the HTML template and CSS file paths
+        const htmlPath = path.join(this._extensionUri.fsPath, 'resources', 'webview.html');
+        const styleUri = webview.asWebviewUri(
+            vscode.Uri.joinPath(this._extensionUri, 'resources', 'styling.css')
+        );
+        const scriptUri = webview.asWebviewUri(
+            vscode.Uri.joinPath(this._extensionUri, 'resources', 'webview.js')
+        );
+
+        try {
+            let htmlContent = fs.readFileSync(htmlPath, 'utf8');
+            
+            // Replace placeholders
+            htmlContent = htmlContent.replace(/\${styleUri}/g, styleUri.toString());
+            htmlContent = htmlContent.replace(/\${scriptUri}/g, scriptUri.toString());
+            
+            return htmlContent;
+        } catch (error) {
+            console.error('Error loading webview HTML template:', error);
+            return this._getFallbackHtml(webview);
+        }
+    }
+
+    private _getFallbackHtml(webview: vscode.Webview) {
+        return `<!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Cloud IDE Hub</title>
+            </head>
+            <body style="color: var(--vscode-foreground); background-color: var(--vscode-editor-background); font-family: var(--vscode-font-family); padding: 20px;">
+                <div>
+                    <h3>Error Loading Cloud IDE Hub</h3>
+                    <p>Could not load the webview HTML template. Please check that the resources/webview.html file exists.</p>
+                </div>
+            </body>
+            </html>`;
     }
 
     // Add cleanup for old test results periodically

@@ -73,8 +73,20 @@
 
             <!-- Test Results Section -->
             <div id="testResultsSection" style="display: none;">
-                <div class="section-title">Last Test Results</div>
-                <div class="test-results" id="testResults"></div>
+                <div class="section-title">
+                    <span id="testResultsTitle">Last Test Results</span>
+                </div>
+                <div class="test-result-summary">
+                    <div class="result-header">
+                        <div class="result-info">
+                            <div id="testResultsTime"></div>
+                            <div id="testResultsDuration"></div>
+                        </div>
+                    </div>
+                    <div class="result-stats" id="testResultsSummary">
+                        <!-- Summary stats will be populated by JS -->
+                    </div>
+                </div>
             </div>
 
             <!-- Test Cases Section -->
