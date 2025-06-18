@@ -1,4 +1,4 @@
-// src/testing/testFileManager.ts
+// src/testing/testFileManager.ts - Modified to store in /tmp with random filenames
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -8,8 +8,8 @@ export interface TestRunResult {
     runId: string;
     timestamp: Date;
     runType: 'all' | 'single' | 'class';
-    targetTest?: string; // For single test runs
-    targetClass?: string; // For class runs
+    targetTest?: string;
+    targetClass?: string;
     passed: number;
     failed: number;
     skipped: number;
@@ -18,6 +18,8 @@ export interface TestRunResult {
     testDetails: TestDetail[];
     command: string;
     output: string;
+    // Add result mapping for quick status lookup
+    testResultsMap: { [key: string]: 'passed' | 'failed' | 'skipped' };
 }
 
 export interface TestDetail {
@@ -36,7 +38,7 @@ export interface TestRunHistory {
 }
 
 export interface TestStatusHistory {
-    testKey: string; // className.methodName
+    testKey: string;
     currentStatus: 'passed' | 'failed' | 'skipped' | 'unknown';
     previousStatus?: 'passed' | 'failed' | 'skipped' | 'unknown';
     statusChanged: boolean;
@@ -46,43 +48,48 @@ export interface TestStatusHistory {
 
 export class TestFileManager {
     private workspacePath: string;
-    private tmpDir: string;
+    private storageDir: string;
     private testResultsFile: string;
     private historyFile: string;
     private lockFile: string;
+    private projectHash: string;
     
     constructor(workspacePath: string) {
         this.workspacePath = workspacePath;
-        this.tmpDir = path.join(this.workspacePath, 'tmp');
+        this.projectHash = this.generateProjectHash(workspacePath);
         
-        // Use obscured file names to prevent easy user modification
-        const projectHash = this.generateProjectHash(workspacePath);
-        this.testResultsFile = path.join(this.tmpDir, `.test_results_${projectHash}.json`);
-        this.historyFile = path.join(this.tmpDir, `.test_history_${projectHash}.json`);
-        this.lockFile = path.join(this.tmpDir, `.test_lock_${projectHash}`);
+        // Store in root/tmp directory with random file names
+        this.storageDir = path.resolve('/tmp');
+        const randomSuffix = crypto.randomBytes(4).toString('hex');
+        this.testResultsFile = path.join(this.storageDir, `test_results_${this.projectHash}_${randomSuffix}.json`);
+        this.historyFile = path.join(this.storageDir, `test_history_${this.projectHash}_${randomSuffix}.json`);
+        this.lockFile = path.join(this.storageDir, `test_lock_${this.projectHash}_${randomSuffix}`);
         
-        this.ensureTmpDirectory();
+        this.ensureStorageDirectory();
     }
 
     private generateProjectHash(workspacePath: string): string {
-        // Create a hash based on workspace path for unique file naming
-        return crypto.createHash('md5').update(workspacePath).digest('hex').substring(0, 8);
+        return crypto.createHash('md5').update(workspacePath).digest('hex').substring(0, 12);
     }
 
-    private ensureTmpDirectory(): void {
+    private ensureStorageDirectory(): void {
         try {
-            if (!fs.existsSync(this.tmpDir)) {
-                fs.mkdirSync(this.tmpDir, { recursive: true });
-            }
-            
-            // Create .gitignore to prevent committing test files
-            const gitignorePath = path.join(this.tmpDir, '.gitignore');
-            if (!fs.existsSync(gitignorePath)) {
-                fs.writeFileSync(gitignorePath, '# Auto-generated test files - do not commit\n*\n!.gitignore\n');
+            // /tmp should already exist on Linux/Unix systems, but check anyway
+            if (!fs.existsSync(this.storageDir)) {
+                fs.mkdirSync(this.storageDir, { recursive: true });
             }
         } catch (error) {
-            console.error('Error creating tmp directory:', error);
-            throw new Error('Failed to create protected test results directory');
+            console.error('Error accessing /tmp directory:', error);
+            // Fallback to workspace tmp if /tmp access fails
+            this.storageDir = path.join(this.workspacePath, '.vscode', 'test-storage');
+            const randomSuffix = crypto.randomBytes(4).toString('hex');
+            this.testResultsFile = path.join(this.storageDir, `test_results_${this.projectHash}_${randomSuffix}.json`);
+            this.historyFile = path.join(this.storageDir, `test_history_${this.projectHash}_${randomSuffix}.json`);
+            this.lockFile = path.join(this.storageDir, `test_lock_${this.projectHash}_${randomSuffix}`);
+            
+            if (!fs.existsSync(this.storageDir)) {
+                fs.mkdirSync(this.storageDir, { recursive: true });
+            }
         }
     }
 
@@ -90,30 +97,42 @@ export class TestFileManager {
         try {
             await this.acquireLock();
             
+            // Create test results map for quick lookups
+            result.testResultsMap = {};
+            result.testDetails.forEach(test => {
+                const key = `${test.className}#${test.name}`;
+                result.testResultsMap[key] = test.status;
+                // Also add short key for easier lookup
+                result.testResultsMap[test.name] = test.status;
+            });
+            
             // Load existing history
             const history = await this.loadTestHistory();
             
             // Update test status tracking
             this.updateTestStatusTracking(history, result);
             
+            // For single test runs, preserve other test statuses
+            if (result.runType === 'single' && history.currentRun) {
+                this.preserveOtherTestStatuses(result, history.currentRun);
+            }
+            
             // Add current run to history
             if (history.currentRun) {
                 history.previousRuns.unshift(history.currentRun);
-                // Keep only last 10 runs to prevent file bloat
                 history.previousRuns = history.previousRuns.slice(0, 10);
             }
             history.currentRun = result;
             
-            // Save updated history
             await this.saveTestHistory(history);
             
-            // Save current results (for backward compatibility)
             const resultData = {
                 ...result,
                 _metadata: {
                     savedAt: new Date().toISOString(),
                     workspacePath: this.workspacePath,
-                    version: '2.0'
+                    projectHash: this.projectHash,
+                    version: '2.1'
                 }
             };
             
@@ -124,9 +143,34 @@ export class TestFileManager {
         }
     }
 
+    private preserveOtherTestStatuses(newResult: TestRunResult, previousResult: TestRunResult): void {
+        // Merge previous test results that weren't run this time
+        if (previousResult.testResultsMap) {
+            Object.entries(previousResult.testResultsMap).forEach(([key, status]) => {
+                if (!newResult.testResultsMap[key]) {
+                    newResult.testResultsMap[key] = status;
+                }
+            });
+        }
+        
+        // Also preserve test details for non-run tests
+        if (previousResult.testDetails) {
+            const runTestKeys = new Set(newResult.testDetails.map(t => `${t.className}#${t.name}`));
+            const preservedDetails = previousResult.testDetails.filter(t => 
+                !runTestKeys.has(`${t.className}#${t.name}`)
+            );
+            newResult.testDetails.push(...preservedDetails);
+        }
+    }
+
     private updateTestStatusTracking(history: TestRunHistory, newResult: TestRunResult): void {
+        // Only update status for tests that were actually run
+        const newlyRunTests = new Set();
+        
         newResult.testDetails.forEach(testDetail => {
             const testKey = `${testDetail.className}.${testDetail.name}`;
+            newlyRunTests.add(testKey);
+            
             const existing = history.testStatusMap.get(testKey);
             
             const statusHistory: TestStatusHistory = {
@@ -140,6 +184,15 @@ export class TestFileManager {
             
             history.testStatusMap.set(testKey, statusHistory);
         });
+        
+        // For single test runs, don't mark other tests as changed
+        if (newResult.runType === 'single') {
+            history.testStatusMap.forEach((statusHistory, key) => {
+                if (!newlyRunTests.has(key)) {
+                    statusHistory.statusChanged = false;
+                }
+            });
+        }
     }
 
     async loadTestResults(): Promise<TestRunResult | undefined> {
@@ -151,10 +204,18 @@ export class TestFileManager {
             const content = fs.readFileSync(this.testResultsFile, 'utf8');
             const data = JSON.parse(content);
             
-            // Validate file integrity
             if (!this.validateTestResultsFile(data)) {
-                console.warn('Test results file appears to be corrupted or tampered with');
+                console.warn('Test results file validation failed');
                 return undefined;
+            }
+            
+            // Ensure testResultsMap exists for backward compatibility
+            if (!data.testResultsMap && data.testDetails) {
+                data.testResultsMap = {};
+                data.testDetails.forEach((test: TestDetail) => {
+                    data.testResultsMap[`${test.className}#${test.name}`] = test.status;
+                    data.testResultsMap[test.name] = test.status;
+                });
             }
             
             return data;
@@ -176,7 +237,6 @@ export class TestFileManager {
             const content = fs.readFileSync(this.historyFile, 'utf8');
             const data = JSON.parse(content);
             
-            // Convert plain object back to Map
             const testStatusMap = new Map();
             if (data.testStatusMap) {
                 Object.entries(data.testStatusMap).forEach(([key, value]) => {
@@ -200,7 +260,6 @@ export class TestFileManager {
 
     private async saveTestHistory(history: TestRunHistory): Promise<void> {
         try {
-            // Convert Map to plain object for JSON serialization
             const serializable = {
                 ...history,
                 testStatusMap: Object.fromEntries(history.testStatusMap)
@@ -214,14 +273,13 @@ export class TestFileManager {
     }
 
     private validateTestResultsFile(data: any): boolean {
-        // Basic validation to detect tampering
         return data && 
                data.runId && 
                data.timestamp && 
                data.testDetails && 
                Array.isArray(data.testDetails) &&
                data._metadata &&
-               data._metadata.workspacePath === this.workspacePath;
+               data._metadata.projectHash === this.projectHash;
     }
 
     async getTestStatusChanges(): Promise<TestStatusHistory[]> {
@@ -238,7 +296,7 @@ export class TestFileManager {
 
     private async acquireLock(): Promise<void> {
         let attempts = 0;
-        const maxAttempts = 50; // 5 seconds max wait
+        const maxAttempts = 50;
         
         while (attempts < maxAttempts) {
             try {
@@ -247,7 +305,6 @@ export class TestFileManager {
                     return;
                 }
                 
-                // Check if lock is stale (older than 30 seconds)
                 const stats = fs.statSync(this.lockFile);
                 const age = Date.now() - stats.mtime.getTime();
                 if (age > 30000) {
@@ -258,7 +315,6 @@ export class TestFileManager {
                 await new Promise(resolve => setTimeout(resolve, 100));
                 attempts++;
             } catch (error) {
-                // Lock file might have been deleted, try again
                 attempts++;
             }
         }
@@ -277,7 +333,6 @@ export class TestFileManager {
     }
 
     async cleanupOldResults(maxAge: number = 7 * 24 * 60 * 60 * 1000): Promise<void> {
-        // Clean up results older than maxAge (default 7 days)
         try {
             const history = await this.loadTestHistory();
             const cutoff = new Date(Date.now() - maxAge);
@@ -296,7 +351,7 @@ export class TestFileManager {
         return this.testResultsFile;
     }
 
-    getTmpDirectory(): string {
-        return this.tmpDir;
+    getStorageDirectory(): string {
+        return this.storageDir;
     }
 }
