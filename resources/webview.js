@@ -3,6 +3,7 @@
     let countdownInterval;
     let sessionEndTime;
     let expiryNotificationTime;
+    let backendConnected = true; // Assume connected by default
     
     // Add log to show script is running
     console.log('Webview script initialized');
@@ -18,6 +19,18 @@
         if (message.command === 'updateSessionEndTime') {
                         
             sessionEndTime = new Date(message.sessionEndTime);
+            
+            // Update backend connection state
+            backendConnected = message.backendConnected !== false; // Default to true if not provided
+            
+            // Show/hide backend warning
+            const backendWarning = document.getElementById('backendWarning');
+            if (backendWarning) {
+                backendWarning.style.display = backendConnected ? 'none' : 'block';
+            }
+            
+            // Update button states based on backend connection
+            updateButtonStates();
             
             // Store the expiry notification time in milliseconds
             if (message.expiryNotificationTime) {
@@ -42,6 +55,30 @@
             countdownInterval = setInterval(updateCountdown, 1000);
         }
     });
+    
+    function updateButtonStates() {
+        // Update all buttons based on backend connection state
+        const openDevServerBtn = document.getElementById('openDevServerBtn');
+        const addTimeBtn = document.getElementById('addTimeBtn');
+        
+        if (openDevServerBtn) {
+            openDevServerBtn.disabled = !backendConnected;
+            if (!backendConnected) {
+                openDevServerBtn.classList.add('disabled');
+            } else {
+                openDevServerBtn.classList.remove('disabled');
+            }
+        }
+        
+        if (addTimeBtn) {
+            addTimeBtn.disabled = !backendConnected;
+            if (!backendConnected) {
+                addTimeBtn.classList.add('disabled');
+            } else {
+                addTimeBtn.classList.remove('disabled');
+            }
+        }
+    }
     
     function updateCountdown() {
         if (!sessionEndTime) return;
@@ -88,12 +125,18 @@
                 addTimeBtn.id = 'addTimeBtn';
                 addTimeBtn.className = 'button';
                 addTimeBtn.textContent = 'Time Management';
+                addTimeBtn.disabled = !backendConnected;
+                if (!backendConnected) {
+                    addTimeBtn.classList.add('disabled');
+                }
                 
                 // Add event listener to the button
                 addTimeBtn.addEventListener('click', () => {
-                    vscode.postMessage({
-                        command: 'addTime'
-                    });
+                    if (backendConnected) {
+                        vscode.postMessage({
+                            command: 'addTime'
+                        });
+                    }
                 });
                 
                 // Add the button to the container

@@ -34,8 +34,9 @@
       },
       {
         "command": "cloud-ide-extension.openRightPanel",
-        "title": "Open Cloud IDE Panel"
-    }
+        "title": "Open AI Assistant",
+        "enablement": "cloudIde.aiAvailable"
+      }
     ],
     "viewsContainers": {
       "activitybar": [

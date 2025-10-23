@@ -1,14 +1,19 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getConfig, runnerState, expiryNotificationTime } from './data';
+import { getConfig, runnerState, expiryNotificationTime, backendConnectionState } from './data';
 import { registerSessionCommands, startGlobalExpiryCheck, stopGlobalExpiryCheck, updateRunnerData } from './session';
 import { registerDevServerCommands } from './devserver';
 import { registerAssistantCommands } from './assistant';
 import { registerInfoCommands } from './info';
 import { handleStartupFile } from './startup';
+import { isOpenAIAvailable } from './openai';
 
 export async function activate(context: vscode.ExtensionContext) {
+    // Set context variable for AI availability
+    const aiAvailable = isOpenAIAvailable();
+    await vscode.commands.executeCommand('setContext', 'cloudIde.aiAvailable', aiAvailable);
+    
     // Create and register webview panel provider
     const provider = new CloudIdeWebviewProvider(context.extensionUri);
     
@@ -105,7 +110,8 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
             this._view.webview.postMessage({
                 command: 'updateSessionEndTime',
                 sessionEndTime: runnerState.sessionEnd,
-                expiryNotificationTime: expiryNotificationTime
+                expiryNotificationTime: expiryNotificationTime,
+                backendConnected: backendConnectionState.isConnected
             });
         }
     }

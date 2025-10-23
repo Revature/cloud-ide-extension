@@ -1,6 +1,5 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { runnerConfig } from './data';
 
 // OpenAI API interfaces
 export interface OpenAIMessage {
@@ -76,7 +75,7 @@ export class OpenAIService {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${runnerConfig.oaiKey}`
+                'Authorization': `Bearer ${this.apiKey}`
             },
             body: JSON.stringify(requestBody)
         });
@@ -88,4 +87,18 @@ export class OpenAIService {
 
         return await response.json();
     }
+}
+
+/**
+ * Get OpenAI API key from environment variable
+ */
+export function getOpenAIKey(): string | undefined {
+    return process.env.OPENAI_API_KEY;
+}
+
+/**
+ * Check if OpenAI features are available
+ */
+export function isOpenAIAvailable(): boolean {
+    return !!getOpenAIKey();
 }

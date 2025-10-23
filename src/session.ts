@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { runnerState, expiryNotificationTime, runnerConfig } from './data';
+import { runnerState, expiryNotificationTime, runnerConfig, backendConnectionState } from './data';
 import { addTime, getRunnerInfo } from './api';
 
 // Global interval reference for session expiry checks
@@ -67,10 +67,26 @@ export async function updateRunnerData(): Promise<void> {
         // Update the runner object with the converted times
         runnerState.sessionEnd = localSessionEnd;
         
+        // Mark backend as connected
+        backendConnectionState.isConnected = true;
+        backendConnectionState.lastError = null;
+        
         return Promise.resolve();
     } catch (error) {
-        console.error('Error updating runner data:', error);
-        return Promise.reject(error);
+        console.warn('Backend API unreachable, using config fallback. Error:', error);
+        
+        // Mark backend as disconnected
+        backendConnectionState.isConnected = false;
+        backendConnectionState.lastError = error instanceof Error ? error.message : 'Unknown error';
+        
+        // Fallback to config sessionEnd
+        if (runnerConfig.sessionEnd) {
+            runnerState.sessionEnd = runnerConfig.sessionEnd;
+            console.log('Using session end time from config:', runnerState.sessionEnd);
+        }
+        
+        // Don't reject - we have a fallback
+        return Promise.resolve();
     }
 }
 

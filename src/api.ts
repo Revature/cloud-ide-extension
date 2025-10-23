@@ -1,13 +1,22 @@
 import { runnerConfig, runnerState } from "./data";
 const apiVersion = "v1"
 
+function getHeaders(): HeadersInit {
+    const headers: HeadersInit = {
+        'Content-Type': 'application/json'
+    };
+    
+    if (runnerConfig.auth) {
+        headers['access-token'] = runnerConfig.auth;
+    }
+    
+    return headers;
+}
+
 export function getRunnerInfo() {
-    return fetch(`${runnerConfig.monolithUrl}/api/${apiVersion}/runners/${runnerConfig.runnerId}`,
+    return fetch(`${runnerConfig.backendUrl}/api/${apiVersion}/runners/${runnerConfig.runnerId}`,
         {
-            headers: {
-                'Auth-Token': runnerConfig.runnerAuth,
-                'Runner-Token': runnerConfig.runnerAuth
-            }
+            headers: getHeaders()
         }
     )
     .then(response => {
@@ -19,13 +28,9 @@ export function getRunnerInfo() {
 }
 
 export function addTime(minutes: number) {
-    return fetch(`${runnerConfig.monolithUrl}/api/${apiVersion}/runners/${runnerConfig.runnerId}/extend_session`,
+    return fetch(`${runnerConfig.backendUrl}/api/${apiVersion}/runners/${runnerConfig.runnerId}/extend_session`,
         {
-            headers: {
-                'Content-Type': 'application/json',
-                'Auth-Token': runnerConfig.runnerAuth,
-                'Runner-Token': runnerConfig.runnerAuth
-            },
+            headers: getHeaders(),
             method: "PUT",
             body: JSON.stringify({
                 runner_id: runnerConfig.runnerId,
@@ -42,12 +47,9 @@ export function addTime(minutes: number) {
 }
 
 export function getDevServer(port: number) {
-    return fetch(`${runnerConfig.monolithUrl}/api/${apiVersion}/runners/${runnerConfig.runnerId}/devserver?port=${port}`,
+    return fetch(`${runnerConfig.backendUrl}/api/${apiVersion}/runners/${runnerConfig.runnerId}/devserver?port=${port}`,
         {
-            headers: {
-                'Auth-Token': runnerConfig.runnerAuth,
-                'Runner-Token': runnerConfig.runnerAuth
-            }
+            headers: getHeaders()
         }
     )
     .then(response => {
@@ -60,12 +62,9 @@ export function getDevServer(port: number) {
 
 export function getNotifications() {
     // Implementation for notifications API
-    return fetch(`${runnerConfig.monolithUrl}/api/${apiVersion}/runners/${runnerConfig.runnerId}/notifications`,
+    return fetch(`${runnerConfig.backendUrl}/api/${apiVersion}/runners/${runnerConfig.runnerId}/notifications`,
         {
-            headers: {
-                'Auth-Token': runnerConfig.runnerAuth,
-                'Runner-Token': runnerConfig.runnerAuth
-            }
+            headers: getHeaders()
         }
     )
     .then(response => {

@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { runnerState } from './data';
-import { OpenAIService } from './openai';
+import { OpenAIService, isOpenAIAvailable, getOpenAIKey } from './openai';
 
 // Right Side Panel Webview class
 class RightSidePanelWebview {
@@ -47,8 +47,11 @@ class RightSidePanelWebview {
         this._panel = panel;
         this._extensionUri = extensionUri;
 
-        // Initialize OpenAI service with hardcoded API key
-        const apiKey = 'YOUR_API_KEY_HERE'; // Replace with your actual API key
+        // Initialize OpenAI service with API key from environment
+        const apiKey = getOpenAIKey();
+        if (!apiKey) {
+            throw new Error('OpenAI API key not found in environment variables');
+        }
         this._openaiService = new OpenAIService(apiKey);
         this._openaiService.loadSystemPrompt(extensionUri.fsPath);
 
@@ -251,10 +254,20 @@ class RightSidePanelWebview {
 }
 
 export function registerAssistantCommands(context: vscode.ExtensionContext) {
+    // Only register AI assistant commands if OpenAI API key is available
+    if (!isOpenAIAvailable()) {
+        console.log('OpenAI API key not found. AI assistant features will be disabled.');
+        return;
+    }
+
     // Register the new command to open webview in right side panel
     context.subscriptions.push(
         vscode.commands.registerCommand('cloud-ide-extension.openRightPanel', () => {
-            RightSidePanelWebview.createOrShow(context.extensionUri);
+            try {
+                RightSidePanelWebview.createOrShow(context.extensionUri);
+            } catch (error) {
+                vscode.window.showErrorMessage(`Failed to open AI Assistant: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
         })
     );
 }
