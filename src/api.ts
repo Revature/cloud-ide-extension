@@ -1,5 +1,4 @@
 import { runnerConfig, runnerState } from "./data";
-const apiVersion = "v1"
 
 function getHeaders(): HeadersInit {
     const headers: HeadersInit = {
@@ -14,7 +13,7 @@ function getHeaders(): HeadersInit {
 }
 
 export function getRunnerInfo() {
-    return fetch(`${runnerConfig.backendUrl}/api/${apiVersion}/runners/${runnerConfig.runnerId}`,
+    return fetch(`${runnerConfig.backendUrl}/runner/${runnerConfig.runnerId}/`,
         {
             headers: getHeaders()
         }
@@ -28,12 +27,11 @@ export function getRunnerInfo() {
 }
 
 export function addTime(minutes: number) {
-    return fetch(`${runnerConfig.backendUrl}/api/${apiVersion}/runners/${runnerConfig.runnerId}/extend_session`,
+    return fetch(`${runnerConfig.backendUrl}/runner/${runnerConfig.runnerId}/extend_session/`,
         {
             headers: getHeaders(),
-            method: "PUT",
+            method: "PATCH",
             body: JSON.stringify({
-                runner_id: runnerConfig.runnerId,
                 extra_time: minutes
             })
         }
@@ -47,7 +45,7 @@ export function addTime(minutes: number) {
 }
 
 export function getDevServer(port: number) {
-    return fetch(`${runnerConfig.backendUrl}/api/${apiVersion}/runners/${runnerConfig.runnerId}/devserver?port=${port}`,
+    return fetch(`${runnerConfig.backendUrl}/runner/${runnerConfig.runnerId}/devserver/?port=${port}`,
         {
             headers: getHeaders()
         }
@@ -62,7 +60,7 @@ export function getDevServer(port: number) {
 
 export function getNotifications() {
     // Implementation for notifications API
-    return fetch(`${runnerConfig.backendUrl}/api/${apiVersion}/runners/${runnerConfig.runnerId}/notifications`,
+    return fetch(`${runnerConfig.backendUrl}/runner/${runnerConfig.runnerId}/notifications/`,
         {
             headers: getHeaders()
         }
