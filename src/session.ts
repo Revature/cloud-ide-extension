@@ -112,7 +112,7 @@ export function registerSessionCommands(context: vscode.ExtensionContext, provid
                 }, expiryNotificationTime * 60 * 1000); // Convert minutes to milliseconds
             });
             
-            if (new Date(new Date(runnerConfig.sessionStart).getTime() + runnerConfig.maxSessionTime * 1000).getTime() 
+            if (new Date(new Date(runnerConfig.sessionStart).getTime() + runnerConfig.maxSessionTime * 60 * 1000).getTime() 
                 < new Date(new Date(runnerState.sessionEnd).getTime() + 60 * 60 * 1000).getTime()){
                     const messagePromise = vscode.window.showInformationMessage(
                         'Your session has exceeded its maximum lifetime. The IDE will shut down soon.',
