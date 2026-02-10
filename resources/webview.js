@@ -15,7 +15,23 @@
     
     window.addEventListener('message', event => {
         const message = event.data;
-        
+
+        // Handle console messages from extension
+        if (message.command === 'console') {
+            const args = message.args || [];
+            switch (message.level) {
+                case 'error':
+                    console.error(`[CDE] ${message.message}`, ...args);
+                    break;
+                case 'warn':
+                    console.warn(`[CDE] ${message.message}`, ...args);
+                    break;
+                default:
+                    console.log(`[CDE] ${message.message}`, ...args);
+            }
+            return;
+        }
+
         if (message.command === 'updateSessionEndTime') {
                         
             sessionEndTime = new Date(message.sessionEndTime);

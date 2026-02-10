@@ -8,6 +8,8 @@ import { registerAssistantCommands } from './assistant';
 import { registerInfoCommands } from './info';
 import { handleStartupFile } from './startup';
 import { isOpenAIAvailable } from './openai';
+import { startIdleDetection, stopIdleDetection } from './idle';
+import { initLogger, log } from './logger';
 
 export async function activate(context: vscode.ExtensionContext) {
     // Set context variable for AI availability
@@ -40,11 +42,15 @@ export async function activate(context: vscode.ExtensionContext) {
     // Start the global expiry check - this will run regardless of webview state
     startGlobalExpiryCheck(provider);
 
+    // Start idle detection for auto-termination
+    startIdleDetection(context);
+
     // Make sure to dispose resources when the extension is deactivated
     context.subscriptions.push({
         dispose: () => {
             provider.dispose();
             stopGlobalExpiryCheck();
+            stopIdleDetection();
         }
     });
 }
@@ -61,7 +67,11 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
         _token: vscode.CancellationToken
     ) {
         this._view = webviewView;
-    
+
+        // Initialize logger with webview for browser console output
+        initLogger(webviewView);
+        log('Extension activated');
+
         // Set options for the webview
         webviewView.webview.options = {
             enableScripts: true,
@@ -174,6 +184,8 @@ class CloudIdeWebviewProvider implements vscode.WebviewViewProvider {
 }
 
 export function deactivate() {
+    log('Extension deactivating');
     // Make sure to clean up the interval when the extension is deactivated
     stopGlobalExpiryCheck();
+    stopIdleDetection();
 }

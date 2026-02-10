@@ -72,3 +72,18 @@ export function getNotifications() {
         return response;
     });
 }
+
+export function terminateRunner() {
+    return fetch(`${runnerConfig.backendUrl}/runner/${runnerConfig.runnerId}/`,
+        {
+            headers: getHeaders(),
+            method: "DELETE"
+        }
+    )
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`Failed to terminate runner: ${response.status} ${response.statusText}`);
+        }
+        return response;
+    });
+}
