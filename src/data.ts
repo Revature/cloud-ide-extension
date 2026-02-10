@@ -37,8 +37,8 @@ export const expiryNotificationTime = 10;
 export const addTimeAmount = 30;
 
 // Idle detection thresholds (in minutes)
-export const idleWarningMinutes = 10;      // Show warning modal after 10 min idle
-export const idleTerminationMinutes = 11;  // Terminate 1 min after warning (11 min total)
+export const idleWarningMinutes = 1;      // Show warning modal after 10 min idle
+export const idleTerminationMinutes = 2;  // Terminate 1 min after warning (11 min total)
 export const idleCheckIntervalSeconds = 10; // How often to check idle status
 
 export function getConfig() {

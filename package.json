@@ -67,7 +67,9 @@
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
-    "test": "vscode-test"
+    "test": "vscode-test",
+    "package": "vsce package",
+    "package:debug": "vsce package --out cloud-ide-extension-DEBUG.vsix"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
