@@ -24,13 +24,28 @@ function resetIdleTimer() {
  * Start idle detection by listening to user activity events
  */
 export function startIdleDetection(context: vscode.ExtensionContext) {
-    // Register activity listeners
+    // Register activity listeners with logging
     context.subscriptions.push(
-        vscode.window.onDidChangeActiveTextEditor(resetIdleTimer),
-        vscode.window.onDidChangeTextEditorSelection(resetIdleTimer),
-        vscode.workspace.onDidChangeTextDocument(resetIdleTimer),
-        vscode.window.onDidChangeWindowState(resetIdleTimer),
-        vscode.window.onDidChangeVisibleTextEditors(resetIdleTimer)
+        vscode.window.onDidChangeActiveTextEditor((editor) => {
+            log(`[IDLE] onDidChangeActiveTextEditor: ${editor?.document?.fileName ?? 'none'}`);
+            resetIdleTimer();
+        }),
+        vscode.window.onDidChangeTextEditorSelection((event) => {
+            log(`[IDLE] onDidChangeTextEditorSelection: ${event.textEditor.document.fileName}`);
+            resetIdleTimer();
+        }),
+        vscode.workspace.onDidChangeTextDocument((event) => {
+            log(`[IDLE] onDidChangeTextDocument: ${event.document.fileName}, changes: ${event.contentChanges.length}, reason: ${event.reason ?? 'user'}`);
+            resetIdleTimer();
+        }),
+        vscode.window.onDidChangeWindowState((state) => {
+            log(`[IDLE] onDidChangeWindowState: focused=${state.focused}`);
+            resetIdleTimer();
+        }),
+        vscode.window.onDidChangeVisibleTextEditors((editors) => {
+            log(`[IDLE] onDidChangeVisibleTextEditors: ${editors.length} editors`);
+            resetIdleTimer();
+        })
     );
 
     // Start the idle check interval (every 30 seconds)
